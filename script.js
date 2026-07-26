@@ -161,10 +161,6 @@ function playTone(freq, duration) {
 const titleScreen = document.getElementById("title-screen");
 const gameScreen = document.getElementById("game-screen");
 const soundBtn = document.getElementById("sound-btn");
-const attackBtn = document.getElementById("attack-btn");
-const feedBtn = document.getElementById("feed-btn");
-const talkBtn = document.getElementById("talk-btn");
-const fishBtn = document.getElementById("fish-btn");
 const cameraViewBtn = document.getElementById("camera-view-btn");
 const photoBtn = document.getElementById("photo-btn");
 const exitHouseBtn = document.getElementById("exit-house-btn");
@@ -174,6 +170,8 @@ const confirmPlaceBtn = document.getElementById("confirm-place-btn");
 const cancelPlaceBtn = document.getElementById("cancel-place-btn");
 const doneToyBtn = document.getElementById("done-toy-btn");
 const toyPaletteEl = document.getElementById("toy-palette");
+const buildMenuToggle = document.getElementById("build-menu-toggle");
+const buildMenuPanel = document.getElementById("build-menu");
 const buildButtons = [
   document.getElementById("build-house-btn"),
   document.getElementById("build-building-btn"),
@@ -188,17 +186,16 @@ const buildButtons = [
   document.getElementById("move-btn"),
 ];
 
+buildMenuToggle.addEventListener("click", () => buildMenuPanel.classList.toggle("hidden"));
+
 let mode = "town"; // 'town' | 'inside'
 
 function updateHud() {
   const driving = !!drivingCar;
   const placing = !!placementKind;
   buildButtons.forEach((b) => b.classList.toggle("hidden", mode === "inside" || placing || driving));
-  attackBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
-  feedBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
-  talkBtn.classList.toggle("hidden", driving || placing);
-  rideBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
-  fishBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
+  buildMenuToggle.classList.toggle("hidden", mode === "inside" || placing || driving);
+  if (mode === "inside" || placing || driving) buildMenuPanel.classList.add("hidden");
   soundBtn.classList.toggle("hidden", placing);
   cameraViewBtn.classList.toggle("hidden", placing);
   photoBtn.classList.toggle("hidden", placing);
@@ -512,6 +509,81 @@ function buildHorizontalRoad(zCenter) {
 
 VERTICAL_ROAD_X.forEach(buildVerticalRoad);
 HORIZONTAL_ROAD_Z.forEach(buildHorizontalRoad);
+
+// ---------- しんごう（こうさてん） ----------
+const nsRedMat = new THREE.MeshBasicMaterial({ color: 0x330000, side: THREE.DoubleSide });
+const nsYellowMat = new THREE.MeshBasicMaterial({ color: 0x332b00, side: THREE.DoubleSide });
+const nsGreenMat = new THREE.MeshBasicMaterial({ color: 0x003300, side: THREE.DoubleSide });
+const ewRedMat = new THREE.MeshBasicMaterial({ color: 0x330000, side: THREE.DoubleSide });
+const ewYellowMat = new THREE.MeshBasicMaterial({ color: 0x332b00, side: THREE.DoubleSide });
+const ewGreenMat = new THREE.MeshBasicMaterial({ color: 0x003300, side: THREE.DoubleSide });
+
+function createSignalHead(redMat, yellowMat, greenMat) {
+  const group = new THREE.Group();
+  const box = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, 0.7, 0.22),
+    new THREE.MeshLambertMaterial({ color: 0x2b2b2b })
+  );
+  group.add(box);
+  const bulbGeo = new THREE.CircleGeometry(0.09, 12);
+  const red = new THREE.Mesh(bulbGeo, redMat);
+  red.position.set(0, 0.22, 0.12);
+  group.add(red);
+  const yellow = new THREE.Mesh(bulbGeo, yellowMat);
+  yellow.position.set(0, 0, 0.12);
+  group.add(yellow);
+  const green = new THREE.Mesh(bulbGeo, greenMat);
+  green.position.set(0, -0.22, 0.12);
+  group.add(green);
+  return group;
+}
+
+function createTrafficLightPole(x, z) {
+  const group = new THREE.Group();
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06, 0.06, 3, 8),
+    new THREE.MeshLambertMaterial({ color: 0x555555 })
+  );
+  pole.position.y = 1.5;
+  group.add(pole);
+
+  const headNS = createSignalHead(nsRedMat, nsYellowMat, nsGreenMat);
+  headNS.position.y = 2.85;
+  group.add(headNS);
+
+  const headEW = createSignalHead(ewRedMat, ewYellowMat, ewGreenMat);
+  headEW.position.y = 2.85;
+  headEW.rotation.y = Math.PI / 2;
+  group.add(headEW);
+
+  group.position.set(x, 0, z);
+  townGroup.add(group);
+}
+
+VERTICAL_ROAD_X.forEach((vx) => {
+  HORIZONTAL_ROAD_Z.forEach((hz) => {
+    createTrafficLightPole(vx + ROAD_HALF_W + 0.8, hz + ROAD_HALF_W + 0.8);
+  });
+});
+
+const TRAFFIC_LIGHT_GREEN = 4;
+const TRAFFIC_LIGHT_YELLOW = 1;
+const TRAFFIC_LIGHT_HALF = TRAFFIC_LIGHT_GREEN + TRAFFIC_LIGHT_YELLOW;
+const TRAFFIC_LIGHT_CYCLE = TRAFFIC_LIGHT_HALF * 2;
+
+function trafficLightStates(time) {
+  const t = time % TRAFFIC_LIGHT_CYCLE;
+  if (t < TRAFFIC_LIGHT_GREEN) return { ns: "green", ew: "red" };
+  if (t < TRAFFIC_LIGHT_HALF) return { ns: "yellow", ew: "red" };
+  if (t < TRAFFIC_LIGHT_HALF + TRAFFIC_LIGHT_GREEN) return { ns: "red", ew: "green" };
+  return { ns: "red", ew: "yellow" };
+}
+
+function applySignalState(redMat, yellowMat, greenMat, state) {
+  redMat.color.set(state === "red" ? 0xff3b30 : 0x330000);
+  yellowMat.color.set(state === "yellow" ? 0xffd23b : 0x332b00);
+  greenMat.color.set(state === "green" ? 0x2ecc71 : 0x003300);
+}
 
 // ---------- き ----------
 
@@ -1331,16 +1403,32 @@ HORIZONTAL_ROAD_Z.forEach((hz) => {
   for (let i = 0; i < 2; i++) spawnTrafficCar("x", hz, -1);
 });
 
-function updateTraffic(delta) {
+const TRAFFIC_STOP_MARGIN = ROAD_HALF_W + 1.5;
+const TRAFFIC_STOP_LOOKAHEAD = 3;
+
+function isTrafficStoppedByLight(pos, dir, crossLines, lightGo) {
+  if (lightGo) return false;
+  for (const line of crossLines) {
+    const distToStop = dir > 0 ? line - TRAFFIC_STOP_MARGIN - pos : pos - (line + TRAFFIC_STOP_MARGIN);
+    if (distToStop > 0 && distToStop < TRAFFIC_STOP_LOOKAHEAD) return true;
+  }
+  return false;
+}
+
+function updateTraffic(delta, lights) {
   trafficCars.forEach((t) => {
     if (t.axis === "z") {
-      t.z += t.dir * t.speed * delta;
-      if (t.z > FIELD_HALF_Z + 3) t.z = -FIELD_HALF_Z - 3;
-      if (t.z < -FIELD_HALF_Z - 3) t.z = FIELD_HALF_Z + 3;
+      if (!isTrafficStoppedByLight(t.z, t.dir, HORIZONTAL_ROAD_Z, lights.ns === "green")) {
+        t.z += t.dir * t.speed * delta;
+        if (t.z > FIELD_HALF_Z + 3) t.z = -FIELD_HALF_Z - 3;
+        if (t.z < -FIELD_HALF_Z - 3) t.z = FIELD_HALF_Z + 3;
+      }
     } else {
-      t.x += t.dir * t.speed * delta;
-      if (t.x > FIELD_HALF_X + 3) t.x = -FIELD_HALF_X - 3;
-      if (t.x < -FIELD_HALF_X - 3) t.x = FIELD_HALF_X + 3;
+      if (!isTrafficStoppedByLight(t.x, t.dir, VERTICAL_ROAD_X, lights.ew === "green")) {
+        t.x += t.dir * t.speed * delta;
+        if (t.x > FIELD_HALF_X + 3) t.x = -FIELD_HALF_X - 3;
+        if (t.x < -FIELD_HALF_X - 3) t.x = FIELD_HALF_X + 3;
+      }
     }
     t.mesh.position.set(t.x, 0, t.z);
   });
@@ -1409,6 +1497,39 @@ const OBJECT_RADIUS = {
   train: 2.6,
   bicycle: 1.0,
 };
+
+// プレイヤーが すりぬけないように するための あたり判定
+// （ドアの ある たてものは、入り口の はんてい半径(1.6)より せまく して、
+// 　まっすぐ ドアに あるいたときに 中に 入れなくならないように している）
+const COLLISION_RADIUS = {
+  house: 1.7,
+  building: 1.9,
+  shop: 1.9,
+  cinema: 2.1,
+  park: 2.6,
+  pond: 2.5,
+  car: 1.3,
+  train: 1.8,
+  bicycle: 0.7,
+};
+const PLAYER_COLLISION_RADIUS = 0.35;
+
+function isBlockedForPlayer(x, z) {
+  for (const s of placedStructures) {
+    const r = (COLLISION_RADIUS[s.type] || 1.6) + PLAYER_COLLISION_RADIUS;
+    if (Math.hypot(x - s.x, z - s.z) < r) return true;
+  }
+  for (const c of placedCars) {
+    const r = (COLLISION_RADIUS[c.type || "car"] || 1.3) + PLAYER_COLLISION_RADIUS;
+    if (Math.hypot(x - c.x, z - c.z) < r) return true;
+  }
+  for (const npc of npcs) {
+    if (npc.isFlyer) continue;
+    const npcRadius = npc.kind === "cow" ? 0.55 : npc.isAnimal ? 0.35 : 0.4;
+    if (Math.hypot(x - npc.x, z - npc.z) < npcRadius + PLAYER_COLLISION_RADIUS) return true;
+  }
+  return false;
+}
 const GHOST_DISTANCE = {
   house: 4.5,
   building: 5,
@@ -1776,7 +1897,6 @@ exitCarBtn.addEventListener("click", exitCarFn);
 
 // ---------- どうぶつに のる ----------
 const RIDE_RADIUS = 3.4;
-const rideBtn = document.getElementById("ride-btn");
 
 function performRide() {
   if (mode !== "town" || drivingCar || placementKind) return;
@@ -1797,7 +1917,6 @@ function performRide() {
   boardCar({ x: nearest.x, z: nearest.z, facing: nearest.facing, mesh: nearest.rig.group, type: "animal", npcRef: nearest, speed: nearest.speed * 2.4 });
   showMessage("🐄 うしに のったよ！");
 }
-rideBtn.addEventListener("click", performRide);
 
 // ---------- いけで さかなを つる ----------
 const FISH_RADIUS = 4;
@@ -1823,7 +1942,6 @@ function performFish() {
   renderFoodInventory();
   saveState();
 }
-fishBtn.addEventListener("click", performFish);
 
 // ==========================================================
 // たてもの／くるまの じょうたい を さいこうちく（よみこみ時）
@@ -2438,7 +2556,6 @@ function performAttack() {
     if (d < 2.6) t.shakeTimer = 0.6;
   });
 }
-attackBtn.addEventListener("click", performAttack);
 
 // ---------- どうぶつに えさをあげる ----------
 function performFeed() {
@@ -2471,7 +2588,6 @@ function performFeed() {
   renderFoodInventory();
   saveState();
 }
-feedBtn.addEventListener("click", performFeed);
 
 // ---------- ひとと はなす ----------
 const TALK_LINES = [
@@ -2554,7 +2670,6 @@ function performTalk() {
   }
   showMessage(`「${pickLine(TALK_LINES)}」`);
 }
-talkBtn.addEventListener("click", performTalk);
 
 // ---------- おみせで こうかん ----------
 const SHOP_TRADE_COST = 5;
@@ -2863,8 +2978,12 @@ function animate() {
       checkFoodCollisions(carState);
       updateCamera(carState, delta);
     } else {
+      const prevPlayerX = player.x;
+      const prevPlayerZ = player.z;
       const runSpeed = player.speed * (keys.run ? RUN_MULTIPLIER : 1);
       const moving = applyMovement(player, runSpeed, delta, (a) => (player.facing = a));
+      if (isBlockedForPlayer(player.x, prevPlayerZ)) player.x = prevPlayerX;
+      if (isBlockedForPlayer(player.x, player.z)) player.z = prevPlayerZ;
       player.x = Math.max(-FIELD_HALF_X + 1, Math.min(FIELD_HALF_X - 1, player.x));
       player.z = Math.max(-FIELD_HALF_Z + 1, Math.min(FIELD_HALF_Z - 1, player.z));
       playerRig.group.position.set(player.x, 0, player.z);
@@ -2886,7 +3005,10 @@ function animate() {
       if (drivingCar && drivingCar.npcRef === npc) return;
       updateNpc(npc, delta, time);
     });
-    updateTraffic(delta);
+    const lights = trafficLightStates(time);
+    applySignalState(nsRedMat, nsYellowMat, nsGreenMat, lights.ns);
+    applySignalState(ewRedMat, ewYellowMat, ewGreenMat, lights.ew);
+    updateTraffic(delta, lights);
     updateDayNight(time);
     const activePos = drivingCar || player;
     updateWeather(delta, activePos.x, activePos.z);

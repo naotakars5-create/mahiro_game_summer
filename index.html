@@ -28,17 +28,15 @@
         <li>シフトキー（or「はしる」ボタン）を おしながらで はやく はしれるよ</li>
         <li>スペースキー・エンターキー（or したの「✨アクション」ボタン）で、ちかくに いる ものに あわせて はなす・のる・つる・えさをあげる・うごかす・こうげきを ぜんぶ 1つの ボタンで できるよ</li>
         <li>まちの ブロックに ふれると あつまるよ</li>
-        <li>「いえ」「ビル」「おみせ」「えいがかん」「こうえん」「いけ」「くるま」「でんしゃ」「じてんしゃ」ボタンで たてる ばしょを えらんで「たてる」を おそう（こうえん・いけは 入り口が ないよ）</li>
+        <li>「🏗️たてる」ボタンを おすと、「いえ」「ビル」「おみせ」「えいがかん」「こうえん」「いけ」「くるま」「でんしゃ」「じてんしゃ」「おもちゃ」「うごかす」の メニューが ひらくよ</li>
+        <li>たてる ものを えらんで ばしょを きめて「ここに たてる」を おそう（こうえん・いけは 入り口が ないよ）</li>
         <li>たてもののドアに ちかづくと、なかに 入れるよ（お店には 店員さんも いるよ）</li>
         <li>入り口の ほうに あるくと、そとに でられるよ（ボタンでも でられるよ）</li>
-        <li>「おもちゃ」ボタンで じぶんだけの さくひんを つくれるよ</li>
-        <li>「こうげき」ボタンで パンチ！どうぶつが びっくりして にげるよ</li>
-        <li>たてものや くるまの ちかくで「うごかす」を おすと、ばしょを えらびなおせるよ</li>
-        <li>まちには たべものも おちてるよ。あつめて、どうぶつに「えさをあげる」を おそう</li>
-        <li>ひとに ちかづいて「はなす」を おすと、おしゃべりできるよ（ブロックを おねがい されることも あるよ）</li>
         <li>おみせの なかで「こうかんする」を おすと、ブロックを たべものに かえられるよ</li>
-        <li>うしに ちかづいて「のる」を おすと、うしに のって うごけるよ</li>
-        <li>いけの ちかくで「つる」を おすと、さかなが つれることが あるよ</li>
+        <li>まちには たべものも おちてるよ。あつめて、どうぶつに「アクション」で えさをあげよう</li>
+        <li>ひとに ちかづいて「アクション」を おすと、おしゃべりできるよ（ブロックを おねがい されることも あるよ）</li>
+        <li>うしに ちかづいて「アクション」を おすと、うしに のって うごけるよ</li>
+        <li>いけの ちかくで「アクション」を おすと、さかなが つれることが あるよ</li>
         <li>「してん」ボタンで カメラを きりかえられるよ。「しゃしん」ボタンで きねんさつえいも できるよ</li>
         <li>タイトルがめんで「まち1」「まち2」「まち3」から あそぶ まちを えらべるよ</li>
       </ol>
@@ -54,22 +52,7 @@
         <button id="sound-btn" class="mini-btn">🔊</button>
         <button id="camera-view-btn" class="mini-btn">📷 してん</button>
         <button id="photo-btn" class="mini-btn">📸 しゃしん</button>
-        <button id="attack-btn" class="mini-btn">🤜 こうげき</button>
-        <button id="feed-btn" class="mini-btn">🍽️ えさをあげる</button>
-        <button id="talk-btn" class="mini-btn">💬 はなす</button>
-        <button id="ride-btn" class="mini-btn">🐄 のる</button>
-        <button id="fish-btn" class="mini-btn">🎣 つる</button>
-        <button id="build-house-btn" class="mini-btn build-trigger">🏠 いえ</button>
-        <button id="build-building-btn" class="mini-btn build-trigger">🏢 ビル</button>
-        <button id="build-shop-btn" class="mini-btn build-trigger">🏪 おみせ</button>
-        <button id="build-cinema-btn" class="mini-btn build-trigger">🎬 えいがかん</button>
-        <button id="build-park-btn" class="mini-btn build-trigger">🌳 こうえん</button>
-        <button id="build-pond-btn" class="mini-btn build-trigger">🎣 いけ</button>
-        <button id="build-car-btn" class="mini-btn build-trigger">🚗 くるま</button>
-        <button id="build-train-btn" class="mini-btn build-trigger">🚂 でんしゃ</button>
-        <button id="build-bicycle-btn" class="mini-btn build-trigger">🚲 じてんしゃ</button>
-        <button id="build-toy-btn" class="mini-btn build-trigger">🧸 おもちゃ</button>
-        <button id="move-btn" class="mini-btn build-trigger">🤚 うごかす</button>
+        <button id="build-menu-toggle" class="mini-btn">🏗️ たてる ▾</button>
         <button id="shop-trade-btn" class="mini-btn hidden">🛒 こうかんする</button>
         <button id="exit-house-btn" class="mini-btn hidden">◀ そとに でる</button>
         <button id="exit-car-btn" class="mini-btn hidden">🚪 くるまを おりる</button>
@@ -77,6 +60,19 @@
         <button id="done-toy-btn" class="mini-btn hidden">👍 できた！</button>
         <button id="cancel-place-btn" class="mini-btn danger hidden">✖ やめる</button>
       </div>
+    </div>
+    <div id="build-menu" class="inventory hidden">
+      <button id="build-house-btn" class="mini-btn build-trigger">🏠 いえ</button>
+      <button id="build-building-btn" class="mini-btn build-trigger">🏢 ビル</button>
+      <button id="build-shop-btn" class="mini-btn build-trigger">🏪 おみせ</button>
+      <button id="build-cinema-btn" class="mini-btn build-trigger">🎬 えいがかん</button>
+      <button id="build-park-btn" class="mini-btn build-trigger">🌳 こうえん</button>
+      <button id="build-pond-btn" class="mini-btn build-trigger">🎣 いけ</button>
+      <button id="build-car-btn" class="mini-btn build-trigger">🚗 くるま</button>
+      <button id="build-train-btn" class="mini-btn build-trigger">🚂 でんしゃ</button>
+      <button id="build-bicycle-btn" class="mini-btn build-trigger">🚲 じてんしゃ</button>
+      <button id="build-toy-btn" class="mini-btn build-trigger">🧸 おもちゃ</button>
+      <button id="move-btn" class="mini-btn build-trigger">🤚 うごかす</button>
     </div>
     <div id="toy-palette" class="inventory hidden"></div>
     <div id="game-message"></div>
