@@ -2647,12 +2647,93 @@ function updateInsideCamera(pos, delta) {
   camera.lookAt(cameraTarget);
 }
 
+// ---------- まとめて つかえる「アクション」ボタン ----------
+// ばめんに あわせて、はなす・のる・つる・えさをあげる・うごかす・こうげきの
+// なかから いちばん ちかい／ふさわしい こうどうを えらんで じっこうする
+function performAction() {
+  if (mode === "inside") {
+    performTalk();
+    return;
+  }
+  if (drivingCar) {
+    exitCarFn();
+    return;
+  }
+  if (placementKind) return;
+
+  const pond = placedStructures.find((s) => s.type === "pond");
+  if (pond && Math.hypot(pond.x - player.x, pond.z - player.z) <= FISH_RADIUS) {
+    performFish();
+    return;
+  }
+
+  let nearestCow = null;
+  let nearestCowDist = Infinity;
+  npcs.forEach((npc) => {
+    if (npc.kind !== "cow") return;
+    const d = Math.hypot(npc.x - player.x, npc.z - player.z);
+    if (d < nearestCowDist) {
+      nearestCowDist = d;
+      nearestCow = npc;
+    }
+  });
+  if (nearestCow && nearestCowDist <= RIDE_RADIUS) {
+    performRide();
+    return;
+  }
+
+  let nearestHumanDist = Infinity;
+  npcs.forEach((npc) => {
+    if (npc.isAnimal) return;
+    const d = Math.hypot(npc.x - player.x, npc.z - player.z);
+    if (d < nearestHumanDist) nearestHumanDist = d;
+  });
+  if (nearestHumanDist <= 3.2) {
+    performTalk();
+    return;
+  }
+
+  if (FOOD_TYPES.some((f) => state.food[f.key] > 0)) {
+    let nearestAnimalDist = Infinity;
+    npcs.forEach((npc) => {
+      if (!npc.isAnimal) return;
+      const d = Math.hypot(npc.x - player.x, npc.z - player.z);
+      if (d < nearestAnimalDist) nearestAnimalDist = d;
+    });
+    if (nearestAnimalDist <= 3.2) {
+      performFeed();
+      return;
+    }
+  }
+
+  let nearestMoveDist = Infinity;
+  placedStructures.forEach((s) => {
+    const d = Math.hypot(player.x - s.x, player.z - s.z);
+    if (d < nearestMoveDist) nearestMoveDist = d;
+  });
+  placedCars.forEach((c) => {
+    const d = Math.hypot(player.x - c.x, player.z - c.z);
+    if (d < nearestMoveDist) nearestMoveDist = d;
+  });
+  if (nearestMoveDist <= MOVE_PICKUP_RADIUS) {
+    requestMove();
+    return;
+  }
+
+  performAttack();
+}
+document.getElementById("btn-action").addEventListener("click", performAction);
+
 // ==========================================================
 // にゅうりょく
 // ==========================================================
-window.addEventListener("keydown", (e) => setKey(e.key, true));
+window.addEventListener("keydown", (e) => {
+  if (e.key === " " || e.key === "Spacebar") e.preventDefault();
+  setKey(e.key, true);
+});
 window.addEventListener("keyup", (e) => setKey(e.key, false));
 
+let actionKeyDown = false;
 function setKey(key, isDown) {
   switch (key) {
     case "ArrowUp":
@@ -2677,6 +2758,12 @@ function setKey(key, isDown) {
       break;
     case "Shift":
       keys.run = isDown;
+      break;
+    case " ":
+    case "Spacebar":
+    case "Enter":
+      if (isDown && !actionKeyDown) performAction();
+      actionKeyDown = isDown;
       break;
   }
 }

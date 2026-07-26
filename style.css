@@ -277,6 +277,25 @@ body {
   margin-top: 4px;
 }
 
+.action-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.action-btn {
+  width: auto;
+  height: auto;
+  border-radius: 20px;
+  padding: 8px 22px;
+  font-size: 1em;
+  font-weight: bold;
+  margin-top: 4px;
+  background: linear-gradient(to bottom, #ff9f43, #ee5a24);
+  color: white;
+  box-shadow: 0 4px 0 #b33914;
+}
+
 @media (max-width: 480px) {
   #title-screen h1 {
     font-size: 1.6em;
