@@ -1305,36 +1305,118 @@ function createPondMesh(palette) {
   const p = palette || POND_PALETTES[0];
   const group = new THREE.Group();
 
+  // くさむらから どろの きしべへ、そして みずへと グラデーションで つながる
+  const grassBank = new THREE.Mesh(
+    new THREE.CylinderGeometry(2.7, 2.85, 0.06, 28),
+    new THREE.MeshLambertMaterial({ color: col(shadeColor(p.bank, 40)) })
+  );
+  grassBank.position.y = 0.03;
+  group.add(grassBank);
+
   const bank = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.4, 2.6, 0.12, 24),
+    new THREE.CylinderGeometry(2.35, 2.55, 0.1, 28),
     new THREE.MeshLambertMaterial({ color: col(p.bank) })
   );
-  bank.position.y = 0.06;
+  bank.position.y = 0.08;
   group.add(bank);
 
-  const water = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.0, 2.0, 0.08, 24),
-    new THREE.MeshLambertMaterial({ color: col(p.water) })
+  const waterDeep = new THREE.Mesh(
+    new THREE.CylinderGeometry(2.0, 2.0, 0.08, 28),
+    new THREE.MeshPhongMaterial({ color: col(shadeColor(p.water, -18)), shininess: 60, transparent: true, opacity: 0.92 })
   );
-  water.position.y = 0.14;
-  group.add(water);
+  waterDeep.position.y = 0.14;
+  group.add(waterDeep);
 
+  const waterShallow = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.5, 1.5, 0.03, 28),
+    new THREE.MeshPhongMaterial({ color: col(p.water), shininess: 90, transparent: true, opacity: 0.85 })
+  );
+  waterShallow.position.y = 0.185;
+  group.add(waterShallow);
+
+  // みずのなかに ゆれる さかなの かげ
+  const fishMat = new THREE.MeshLambertMaterial({ color: 0x2b5f6b });
+  [[-0.5, 0.3], [0.6, -0.4], [-0.1, -0.7]].forEach(([fx, fz]) => {
+    const fish = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), fishMat);
+    fish.scale.set(1.6, 0.35, 0.7);
+    fish.position.set(fx, 0.12, fz);
+    fish.rotation.y = Math.random() * Math.PI * 2;
+    group.add(fish);
+  });
+
+  // すいれんの は（はなつき）
   const padMat = new THREE.MeshLambertMaterial({ color: col("#4caf50") });
-  for (let i = 0; i < 4; i++) {
-    const angle = (i / 4) * Math.PI * 2 + 0.4;
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.03, 10), padMat);
-    pad.position.set(Math.cos(angle) * 1.1, 0.19, Math.sin(angle) * 1.1);
+  const flowerMat = new THREE.MeshLambertMaterial({ color: 0xffb6d9 });
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2 + 0.4;
+    const rad = 0.9 + (i % 2) * 0.35;
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.03, 12), padMat);
+    pad.position.set(Math.cos(angle) * rad, 0.2, Math.sin(angle) * rad);
     group.add(pad);
+    if (i % 2 === 0) {
+      const flower = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.12, 6), flowerMat);
+      flower.position.set(Math.cos(angle) * rad, 0.27, Math.sin(angle) * rad);
+      group.add(flower);
+    }
   }
 
+  // きしべの いわ
+  const rockMat = new THREE.MeshLambertMaterial({ color: 0x8d99ae });
+  [
+    [2.15, 1.0, 0.22],
+    [-2.0, -1.3, 0.28],
+    [1.6, -1.9, 0.18],
+  ].forEach(([rx, rz, rs]) => {
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rs, 0), rockMat);
+    rock.position.set(rx, rs * 0.5, rz);
+    rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+    group.add(rock);
+  });
+
+  // あしの くさむら
+  function makeReedCluster(rx, rz) {
+    const reedMat = new THREE.MeshLambertMaterial({ color: 0x5c8a3a });
+    const capMat = new THREE.MeshLambertMaterial({ color: 0x6b4226 });
+    for (let i = 0; i < 4; i++) {
+      const h = 0.7 + Math.random() * 0.5;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, h, 5), reedMat);
+      const ox = rx + (Math.random() - 0.5) * 0.4;
+      const oz = rz + (Math.random() - 0.5) * 0.4;
+      stem.position.set(ox, h / 2 + 0.1, oz);
+      stem.rotation.z = (Math.random() - 0.5) * 0.25;
+      group.add(stem);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.18, 6), capMat);
+      cap.position.set(ox, h + 0.1, oz);
+      cap.rotation.z = stem.rotation.z;
+      group.add(cap);
+    }
+  }
+  makeReedCluster(-2.3, 1.6);
+  makeReedCluster(2.0, -1.6);
+
+  // きの ドック（いたを ならべた ような みため）
   const dockMat = new THREE.MeshLambertMaterial({ color: col(p.dock) });
-  const dock = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 1.6), dockMat);
-  dock.position.set(0, 0.18, 2.4);
-  group.add(dock);
-  [-0.25, 0.25].forEach((lx) => {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.08), dockMat);
-    leg.position.set(lx, 0.08, 2.9);
-    group.add(leg);
+  const plankGapMat = new THREE.MeshLambertMaterial({ color: col(shadeColor(p.dock, -25)) });
+  const dockBase = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.06, 1.7), plankGapMat);
+  dockBase.position.set(0, 0.16, 2.4);
+  group.add(dockBase);
+  for (let i = 0; i < 4; i++) {
+    const plank = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.08, 1.66), dockMat);
+    plank.position.set(-0.24 + i * 0.16, 0.19, 2.4);
+    group.add(plank);
+  }
+  [-0.28, 0.28].forEach((lx) => {
+    [1.65, 3.15].forEach((lz) => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.24, 0.08), dockMat);
+      leg.position.set(lx, 0.08, lz);
+      group.add(leg);
+    });
+  });
+  const postMat = new THREE.MeshLambertMaterial({ color: col(shadeColor(p.dock, -10)) });
+  [-0.28, 0.28].forEach((lx) => {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.55, 8), postMat);
+    post.position.set(lx, 0.45, 3.1);
+    group.add(post);
   });
 
   return { group, doorLocal: new THREE.Vector3(0, 0, 0), wallHex: p.bank, label: "いけ" };
