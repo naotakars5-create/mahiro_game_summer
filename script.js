@@ -136,6 +136,7 @@ const gameScreen = document.getElementById("game-screen");
 const soundBtn = document.getElementById("sound-btn");
 const attackBtn = document.getElementById("attack-btn");
 const feedBtn = document.getElementById("feed-btn");
+const talkBtn = document.getElementById("talk-btn");
 const exitHouseBtn = document.getElementById("exit-house-btn");
 const exitCarBtn = document.getElementById("exit-car-btn");
 const confirmPlaceBtn = document.getElementById("confirm-place-btn");
@@ -163,6 +164,7 @@ function updateHud() {
   buildButtons.forEach((b) => b.classList.toggle("hidden", mode === "inside" || placing || driving));
   attackBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
   feedBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
+  talkBtn.classList.toggle("hidden", driving || placing);
   soundBtn.classList.toggle("hidden", placing);
   exitHouseBtn.classList.toggle("hidden", mode !== "inside");
   exitCarBtn.classList.toggle("hidden", mode !== "town" || !driving || placing);
@@ -2122,6 +2124,68 @@ function performFeed() {
   saveState();
 }
 feedBtn.addEventListener("click", performFeed);
+
+// ---------- ひとと はなす ----------
+const TALK_LINES = [
+  "こんにちは！",
+  "きょうは いい てんきだね",
+  "いっしょに あそぼうよ！",
+  "ブロック あつめてる? がんばってね",
+  "げんきそうだね！",
+  "まちが どんどん にぎやかに なってきたね",
+  "また あとで はなそうね",
+];
+const INTERIOR_TALK_LINES = {
+  shop: ["いらっしゃいませ！", "きょうは なにか さがしてるの?", "ブロックを あつめて また きてね"],
+  building: ["おつかれさま！", "けいびは まかせて！", "きょうも あんぜんに いこうね"],
+  house: ["おかえりー！", "ごはん たべた?", "また あそびに きてね"],
+  cinema: ["きょうは どの えいがを みる?", "ポップコーンも あるよ", "たのしんで いってね"],
+};
+
+function pickLine(lines) {
+  return lines[Math.floor(Math.random() * lines.length)];
+}
+
+function performTalk() {
+  if (drivingCar || placementKind) return;
+  if (mode === "inside") {
+    if (!interiorNpc) {
+      showMessage("ちかくに はなせる ひとが いないよ");
+      return;
+    }
+    interiorNpc.rig.group.rotation.y = Math.atan2(
+      player.x - interiorNpc.rig.group.position.x,
+      player.z - interiorNpc.rig.group.position.z
+    );
+    playTone(700, 0.1);
+    playTone(880, 0.12);
+    const npcType = currentBuilding ? currentBuilding.type : null;
+    const label = INTERIOR_NPC_LABEL[npcType] || "だれか";
+    const lines = INTERIOR_TALK_LINES[npcType] || TALK_LINES;
+    showMessage(`${label}「${pickLine(lines)}」`);
+    return;
+  }
+  let nearest = null;
+  let nearestDist = Infinity;
+  npcs.forEach((npc) => {
+    if (npc.isAnimal) return;
+    const d = Math.hypot(npc.x - player.x, npc.z - player.z);
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearest = npc;
+    }
+  });
+  if (!nearest || nearestDist > 3.2) {
+    showMessage("ちかくに はなせる ひとが いないよ");
+    return;
+  }
+  nearest.facing = Math.atan2(player.x - nearest.x, player.z - nearest.z);
+  nearest.happyTimer = 0.6;
+  playTone(700, 0.1);
+  playTone(880, 0.12);
+  showMessage(`「${pickLine(TALK_LINES)}」`);
+}
+talkBtn.addEventListener("click", performTalk);
 
 // ==========================================================
 // カメラ
