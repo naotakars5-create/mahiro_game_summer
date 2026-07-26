@@ -166,6 +166,7 @@ function updateHud() {
   attackBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
   feedBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
   talkBtn.classList.toggle("hidden", driving || placing);
+  rideBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
   soundBtn.classList.toggle("hidden", placing);
   cameraViewBtn.classList.toggle("hidden", placing);
   exitHouseBtn.classList.toggle("hidden", mode !== "inside");
@@ -581,6 +582,14 @@ function createHumanoid(opts) {
         rightLeg.rotation.x = -pedal;
         leftArm.rotation.x = -1.1;
         rightArm.rotation.x = -1.1;
+        return;
+      }
+      if (pose === "ride") {
+        const sway = moving ? Math.sin(phase) * 0.35 : 0;
+        leftLeg.rotation.x = sway;
+        rightLeg.rotation.x = -sway;
+        leftArm.rotation.x = -0.7;
+        rightArm.rotation.x = -0.7;
         return;
       }
       const swing = moving ? Math.sin(phase) * 0.9 : 0;
@@ -1642,11 +1651,18 @@ let drivingCar = null;
 
 const BICYCLE_SEAT_DIST = 0.35;
 const BICYCLE_SEAT_HEIGHT = 0.19;
+const ANIMAL_RIDE_HEIGHT = 0.65;
+VEHICLE_EXIT_DIST.animal = 2.2;
 
 function boardCar(car) {
   drivingCar = car;
-  playerRig.group.visible = car.type === "bicycle";
-  const exitLabels = { car: "🚪 くるまを おりる", train: "🚪 でんしゃを おりる", bicycle: "🚪 じてんしゃを おりる" };
+  playerRig.group.visible = car.type === "bicycle" || car.type === "animal";
+  const exitLabels = {
+    car: "🚪 くるまを おりる",
+    train: "🚪 でんしゃを おりる",
+    bicycle: "🚪 じてんしゃを おりる",
+    animal: "🚪 どうぶつから おりる",
+  };
   exitCarBtn.textContent = exitLabels[car.type || "car"];
   playTone(400, 0.1);
   updateHud();
@@ -1660,11 +1676,42 @@ function exitCarFn() {
   player.z = car.z - Math.cos(car.facing) * exitDist;
   player.x = Math.max(-FIELD_HALF_X + 1, Math.min(FIELD_HALF_X - 1, player.x));
   player.z = Math.max(-FIELD_HALF_Z + 1, Math.min(FIELD_HALF_Z - 1, player.z));
+  if (car.type === "animal" && car.npcRef) {
+    car.npcRef.x = car.x;
+    car.npcRef.z = car.z;
+    car.npcRef.facing = car.facing;
+    car.npcRef.target = null;
+  }
   playerRig.group.visible = true;
   drivingCar = null;
   updateHud();
 }
 exitCarBtn.addEventListener("click", exitCarFn);
+
+// ---------- どうぶつに のる ----------
+const RIDE_RADIUS = 3.4;
+const rideBtn = document.getElementById("ride-btn");
+
+function performRide() {
+  if (mode !== "town" || drivingCar || placementKind) return;
+  let nearest = null;
+  let nearestDist = Infinity;
+  npcs.forEach((npc) => {
+    if (npc.kind !== "cow") return;
+    const d = Math.hypot(npc.x - player.x, npc.z - player.z);
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearest = npc;
+    }
+  });
+  if (!nearest || nearestDist > RIDE_RADIUS) {
+    showMessage("ちかくに のれる どうぶつが いないよ（うしを さがしてね）");
+    return;
+  }
+  boardCar({ x: nearest.x, z: nearest.z, facing: nearest.facing, mesh: nearest.rig.group, type: "animal", npcRef: nearest, speed: nearest.speed * 2.4 });
+  showMessage("🐄 うしに のったよ！");
+}
+rideBtn.addEventListener("click", performRide);
 
 // ==========================================================
 // たてもの／くるまの じょうたい を さいこうちく（よみこみ時）
@@ -2156,6 +2203,7 @@ function spawnNpc(rig, options) {
     phase: Math.random() * Math.PI * 2,
     isFlyer: !!options.isFlyer,
     isAnimal: !!options.isAnimal,
+    kind: options.kind || null,
     flyHeight: options.flyHeight || 0,
     hopTimer: 0,
     happyTimer: 0,
@@ -2174,11 +2222,11 @@ for (let i = 0; i < 3; i++) {
   });
   spawnNpc(rig, { speed: 1.6 });
 }
-for (let i = 0; i < 2; i++) spawnNpc(createCow(), { speed: 1.1, isAnimal: true });
-for (let i = 0; i < 2; i++) spawnNpc(createDog(), { speed: 2.2, isAnimal: true });
-for (let i = 0; i < 2; i++) spawnNpc(createCat(), { speed: 1.9, isAnimal: true });
+for (let i = 0; i < 2; i++) spawnNpc(createCow(), { speed: 1.1, isAnimal: true, kind: "cow" });
+for (let i = 0; i < 2; i++) spawnNpc(createDog(), { speed: 2.2, isAnimal: true, kind: "dog" });
+for (let i = 0; i < 2; i++) spawnNpc(createCat(), { speed: 1.9, isAnimal: true, kind: "cat" });
 for (let i = 0; i < 2; i++)
-  spawnNpc(createBird(), { speed: 2.6, isFlyer: true, flyHeight: 2.2 + Math.random(), isAnimal: true });
+  spawnNpc(createBird(), { speed: 2.6, isFlyer: true, flyHeight: 2.2 + Math.random(), isAnimal: true, kind: "bird" });
 
 function updateNpc(npc, delta, time) {
   if (npc.happyTimer > 0) {
@@ -2482,7 +2530,7 @@ function animate() {
     if (drivingCar) {
       const carState = drivingCar;
       const carPos = { x: carState.x, z: carState.z };
-      const vehicleSpeed = VEHICLE_SPEED[carState.type || "car"];
+      const vehicleSpeed = carState.speed || VEHICLE_SPEED[carState.type || "car"];
       const moving = applyMovement(carPos, vehicleSpeed, delta, (a) => (carState.facing = a));
       carPos.x = Math.max(-FIELD_HALF_X + 2, Math.min(FIELD_HALF_X - 2, carPos.x));
       carPos.z = Math.max(-FIELD_HALF_Z + 2, Math.min(FIELD_HALF_Z - 2, carPos.z));
@@ -2499,6 +2547,15 @@ function animate() {
         playerRig.group.rotation.y = carState.facing;
         if (moving) walkPhase += delta * 10;
         playerRig.animate(walkPhase, moving, 0, "bike");
+      } else if (carState.type === "animal") {
+        playerRig.group.position.set(carState.x, ANIMAL_RIDE_HEIGHT, carState.z);
+        playerRig.group.rotation.y = carState.facing;
+        if (moving) walkPhase += delta * 6;
+        playerRig.animate(walkPhase, moving, 0, "ride");
+        if (carState.npcRef) {
+          carState.npcRef.phase += delta * 6;
+          carState.npcRef.rig.animate(carState.npcRef.phase, moving);
+        }
       }
       checkBlockCollisions(carState);
       checkFoodCollisions(carState);
@@ -2523,7 +2580,10 @@ function animate() {
       updateCamera(player, delta);
     }
 
-    npcs.forEach((npc) => updateNpc(npc, delta, time));
+    npcs.forEach((npc) => {
+      if (drivingCar && drivingCar.npcRef === npc) return;
+      updateNpc(npc, delta, time);
+    });
     updateTraffic(delta);
     updateDayNight(time);
     const activePos = drivingCar || player;
