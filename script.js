@@ -31,7 +31,26 @@ const TRAIN_RECIPE = { gray: 8, blue: 4, yellow: 3, red: 2 };
 const BICYCLE_RECIPE = { gray: 3, red: 2, blue: 1 };
 const VEHICLE_KINDS = ["car", "train", "bicycle"];
 
-const SAVE_KEY = "legoTown3dSave_v1";
+const SAVE_KEY_PREFIX = "legoTown3dSave_v1_slot";
+const LAST_SLOT_KEY = "legoTown3dLastSlot";
+
+function saveKeyFor(slot) {
+  return `${SAVE_KEY_PREFIX}${slot}`;
+}
+
+let currentSlot = Number(localStorage.getItem(LAST_SLOT_KEY)) || 1;
+
+// ふるい（スロットが なかった ころの）セーブを 1ばんの まちへ ひきつぐ
+(function migrateLegacySave() {
+  try {
+    const legacy = localStorage.getItem("legoTown3dSave_v1");
+    if (legacy && !localStorage.getItem(saveKeyFor(1))) {
+      localStorage.setItem(saveKeyFor(1), legacy);
+    }
+  } catch (e) {
+    // いじょうが あっても むしできるようにする
+  }
+})();
 
 let state = {
   inventory: { red: 0, gray: 0, blue: 0, yellow: 0, green: 0, purple: 0 },
@@ -77,7 +96,7 @@ function saveState() {
       toyBlocks: state.toyBlocks,
       soundOn: state.soundOn,
     };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(toSave));
+    localStorage.setItem(saveKeyFor(currentSlot), JSON.stringify(toSave));
   } catch (e) {
     console.warn("ほぞんに しっぱいしました", e);
   }
@@ -85,7 +104,7 @@ function saveState() {
 
 function loadState() {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(saveKeyFor(currentSlot));
     if (raw) {
       const loaded = JSON.parse(raw);
       state = Object.assign(state, loaded);
@@ -2822,10 +2841,50 @@ function animate() {
 requestAnimationFrame(animate);
 
 // ==========================================================
+// セーブスロット えらび
+// ==========================================================
+function peekSlotSummary(slot) {
+  try {
+    const raw = localStorage.getItem(saveKeyFor(slot));
+    if (!raw) return "あたらしい まち";
+    const data = JSON.parse(raw);
+    const structCount = (data.structures || []).length;
+    const carCount = (data.cars || []).length;
+    if (structCount === 0 && carCount === 0) return "あたらしい まち";
+    return `🏠×${structCount} 🚗×${carCount}`;
+  } catch (e) {
+    return "あたらしい まち";
+  }
+}
+
+const slotButtons = Array.from(document.querySelectorAll(".slot-btn"));
+function renderSlotPicker() {
+  slotButtons.forEach((btn) => {
+    const slot = Number(btn.dataset.slot);
+    btn.classList.toggle("selected", slot === currentSlot);
+    const sub = btn.querySelector(".slot-sub");
+    if (sub) sub.textContent = peekSlotSummary(slot);
+  });
+}
+slotButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    currentSlot = Number(btn.dataset.slot);
+    localStorage.setItem(LAST_SLOT_KEY, String(currentSlot));
+    renderSlotPicker();
+  });
+});
+renderSlotPicker();
+
+// ==========================================================
 // スタート
 // ==========================================================
 document.getElementById("start-btn").addEventListener("click", () => {
   ensureAudio();
+  loadState();
+  rebuildFromState();
+  soundBtn.textContent = state.soundOn ? "🔊" : "🔇";
+  renderInventory();
+  renderFoodInventory();
   titleScreen.classList.add("hidden");
   gameScreen.classList.remove("hidden");
   resizeRenderer();
@@ -2833,10 +2892,3 @@ document.getElementById("start-btn").addEventListener("click", () => {
   updateHud();
   playTone(700, 0.15);
 });
-
-loadState();
-rebuildFromState();
-soundBtn.textContent = state.soundOn ? "🔊" : "🔇";
-renderInventory();
-renderFoodInventory();
-updateHud();
