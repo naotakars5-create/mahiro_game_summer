@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>レゴあつめ＆まちづくりゲーム</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ====== タイトルがめん ====== -->
+  <div id="title-screen" class="screen">
+    <h1>🧱 レゴあつめ<br>＆ まちづくり 🏠</h1>
+    <p class="sub">ブロックをあつめて、いえや まちを つくろう！</p>
+    <button id="start-btn" class="big-btn">スタート ▶</button>
+    <div class="howto">
+      <h2>あそびかた</h2>
+      <ol>
+        <li>やじるしキー（or したの ボタン）で うごく</li>
+        <li>フィールドの ブロックに ふれると あつまるよ</li>
+        <li>「つくる」がめんで まちを つくろう！</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ====== あつめるがめん ====== -->
+  <div id="collect-screen" class="screen hidden">
+    <div class="topbar">
+      <div id="inventory" class="inventory"></div>
+      <div class="topbar-buttons">
+        <button id="sound-btn" class="mini-btn">🔊</button>
+        <button id="to-build-btn" class="mini-btn">つくる ▶</button>
+      </div>
+    </div>
+    <canvas id="game-canvas" width="640" height="420"></canvas>
+    <div id="touch-controls">
+      <button id="btn-up" class="dpad">⬆</button>
+      <div class="dpad-row">
+        <button id="btn-left" class="dpad">⬅</button>
+        <button id="btn-down" class="dpad">⬇</button>
+        <button id="btn-right" class="dpad">➡</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== つくるがめん ====== -->
+  <div id="build-screen" class="screen hidden">
+    <div class="topbar">
+      <div id="inventory-build" class="inventory"></div>
+      <div class="topbar-buttons">
+        <button id="to-collect-btn" class="mini-btn">◀ あつめる</button>
+      </div>
+    </div>
+    <div id="build-message"></div>
+    <div class="build-area">
+      <div id="build-grid"></div>
+      <div class="palette-panel">
+        <p class="panel-title">いろを えらぶ</p>
+        <div id="color-palette"></div>
+        <button id="eraser-btn" class="mini-btn">🧹 けす</button>
+        <hr>
+        <button id="house-btn" class="big-btn small">🏠 いえを たてる</button>
+        <button id="clear-btn" class="mini-btn danger">ぜんぶ けす</button>
+      </div>
+    </div>
+  </div>
+
+<script src="script.js"></script>
+</body>
+</html>

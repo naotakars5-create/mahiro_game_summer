@@ -1,0 +1,282 @@
+/* ==========================================================
+   レゴあつめ＆まちづくりゲーム - スタイル
+   小学生にも見やすいように、大きめ・カラフルにしています
+   ========================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Meiryo", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  background: linear-gradient(to bottom, #8ed1fc 0%, #b7e778 60%, #8bc34a 100%);
+  color: #2d2d2d;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.screen {
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+/* ---------- タイトル画面 ---------- */
+#title-screen h1 {
+  font-size: 2.2em;
+  line-height: 1.3;
+  text-shadow: 2px 2px 0 #fff, -1px -1px 0 #fff;
+  margin-top: 10px;
+}
+
+#title-screen .sub {
+  font-size: 1.2em;
+  margin-bottom: 20px;
+}
+
+.big-btn {
+  font-size: 1.6em;
+  padding: 16px 40px;
+  border: none;
+  border-radius: 20px;
+  background: linear-gradient(to bottom, #ff9f43, #ee5a24);
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 6px 0 #b33914;
+  cursor: pointer;
+  margin-bottom: 24px;
+}
+
+.big-btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 #b33914;
+}
+
+.big-btn.small {
+  font-size: 1.1em;
+  padding: 10px 18px;
+  box-shadow: 0 4px 0 #b33914;
+  width: 100%;
+}
+
+.howto {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 16px;
+  padding: 14px 24px;
+  display: inline-block;
+  text-align: left;
+  font-size: 1.1em;
+}
+
+.howto h2 {
+  margin-top: 0;
+}
+
+/* ---------- 共通トップバー ---------- */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 14px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.topbar-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.mini-btn {
+  font-size: 1em;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 12px;
+  background: #45aaf2;
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 3px 0 #2d7dc9;
+  cursor: pointer;
+}
+
+.mini-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 #2d7dc9;
+}
+
+.mini-btn.danger {
+  background: #ff6b6b;
+  box-shadow: 0 3px 0 #c0392b;
+}
+
+.inventory {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.inv-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: white;
+  border-radius: 10px;
+  padding: 4px 8px;
+  font-weight: bold;
+  font-size: 1em;
+  border: 2px solid #ccc;
+}
+
+.inv-badge .swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 2px solid rgba(0,0,0,0.25);
+}
+
+/* ---------- あつめる画面 ---------- */
+#game-canvas {
+  background: #7bc96f;
+  border-radius: 14px;
+  border: 4px solid #4b7f2d;
+  width: 100%;
+  max-width: 640px;
+  touch-action: none;
+  display: block;
+  margin: 0 auto;
+}
+
+#touch-controls {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.dpad-row {
+  display: flex;
+  gap: 44px;
+}
+
+.dpad {
+  width: 56px;
+  height: 56px;
+  font-size: 1.4em;
+  border-radius: 50%;
+  border: none;
+  background: #ffffffcc;
+  box-shadow: 0 4px 0 #999;
+  cursor: pointer;
+}
+
+.dpad:active {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+
+/* ---------- つくる画面 ---------- */
+#build-message {
+  min-height: 1.6em;
+  font-weight: bold;
+  color: #d63031;
+  margin: 4px 0;
+}
+
+.build-area {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+#build-grid {
+  display: grid;
+  grid-template-columns: repeat(14, 1fr);
+  grid-template-rows: repeat(10, 1fr);
+  gap: 2px;
+  background: #5b3a29;
+  border: 4px solid #3e2723;
+  border-radius: 10px;
+  padding: 4px;
+  width: 100%;
+  max-width: 560px;
+  aspect-ratio: 14 / 10;
+}
+
+.cell {
+  background: #d8c9a3;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.cell:hover {
+  filter: brightness(1.1);
+}
+
+.palette-panel {
+  background: rgba(255,255,255,0.9);
+  border-radius: 14px;
+  padding: 12px;
+  width: 160px;
+  min-width: 140px;
+}
+
+.panel-title {
+  font-weight: bold;
+  margin: 4px 0;
+}
+
+#color-palette {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.color-swatch-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 3px solid transparent;
+  cursor: pointer;
+}
+
+.color-swatch-btn.selected {
+  border-color: #333;
+  transform: scale(1.1);
+}
+
+.palette-panel .mini-btn {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+hr {
+  border: none;
+  border-top: 2px dashed #ccc;
+  margin: 10px 0;
+}
+
+@media (max-width: 480px) {
+  #title-screen h1 {
+    font-size: 1.6em;
+  }
+  .palette-panel {
+    width: 100%;
+  }
+}
