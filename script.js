@@ -140,6 +140,7 @@ const talkBtn = document.getElementById("talk-btn");
 const cameraViewBtn = document.getElementById("camera-view-btn");
 const photoBtn = document.getElementById("photo-btn");
 const exitHouseBtn = document.getElementById("exit-house-btn");
+const shopTradeBtn = document.getElementById("shop-trade-btn");
 const exitCarBtn = document.getElementById("exit-car-btn");
 const confirmPlaceBtn = document.getElementById("confirm-place-btn");
 const cancelPlaceBtn = document.getElementById("cancel-place-btn");
@@ -172,6 +173,7 @@ function updateHud() {
   cameraViewBtn.classList.toggle("hidden", placing);
   photoBtn.classList.toggle("hidden", placing);
   exitHouseBtn.classList.toggle("hidden", mode !== "inside");
+  shopTradeBtn.classList.toggle("hidden", !(mode === "inside" && currentBuilding && currentBuilding.type === "shop"));
   exitCarBtn.classList.toggle("hidden", mode !== "town" || !driving || placing);
   confirmPlaceBtn.classList.toggle("hidden", !placing);
   doneToyBtn.classList.toggle("hidden", placementKind !== "block");
@@ -2394,6 +2396,36 @@ function performTalk() {
   showMessage(`「${pickLine(TALK_LINES)}」`);
 }
 talkBtn.addEventListener("click", performTalk);
+
+// ---------- おみせで こうかん ----------
+const SHOP_TRADE_COST = 5;
+
+function performShopTrade() {
+  if (mode !== "inside" || !currentBuilding || currentBuilding.type !== "shop") return;
+  let bestKey = null;
+  let bestCount = 0;
+  COLORS.forEach((c) => {
+    if (state.inventory[c.key] > bestCount) {
+      bestCount = state.inventory[c.key];
+      bestKey = c.key;
+    }
+  });
+  if (!bestKey || bestCount < SHOP_TRADE_COST) {
+    showMessage(`ブロックが ${SHOP_TRADE_COST}こ たりないよ（いろは なんでも いいよ）`);
+    return;
+  }
+  state.inventory[bestKey] -= SHOP_TRADE_COST;
+  const food = FOOD_TYPES[Math.floor(Math.random() * FOOD_TYPES.length)];
+  state.food[food.key]++;
+  const colorName = COLORS.find((c) => c.key === bestKey).name;
+  playTone(720, 0.1);
+  playTone(980, 0.12);
+  showMessage(`${colorName}ブロックを ${SHOP_TRADE_COST}こ わたして、${food.emoji} を もらったよ！`);
+  renderInventory();
+  renderFoodInventory();
+  saveState();
+}
+shopTradeBtn.addEventListener("click", performShopTrade);
 
 // ==========================================================
 // カメラ（してんを きりかえられる）
