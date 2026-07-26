@@ -28,6 +28,7 @@ const CINEMA_RECIPE = { gray: 5, red: 4, yellow: 4, blue: 2 };
 const PARK_RECIPE = { green: 5, yellow: 3, blue: 2 };
 const SCHOOL_RECIPE = { gray: 6, red: 4, blue: 4, yellow: 3 };
 const YATAI_RECIPE = { red: 3, yellow: 2 };
+const RESTAURANT_RECIPE = { red: 3, yellow: 3, gray: 2 };
 const POND_RECIPE = { blue: 4, gray: 2 };
 const CAR_RECIPE = { red: 5, gray: 4, blue: 3 };
 const TRAIN_RECIPE = { gray: 8, blue: 4, yellow: 3, red: 2 };
@@ -1076,6 +1077,88 @@ function createShopMesh(palette) {
   return { group, doorLocal, wallHex, label: "おみせ" };
 }
 
+function createRestaurantMesh(palette) {
+  const p = palette || RESTAURANT_PALETTES[0];
+  const wallHex = p.wall;
+  const awningHex = p.awning;
+  const doorHex = "#5b3a29";
+  const group = new THREE.Group();
+
+  const w = 3.8;
+  const h = 2.6;
+  const d = 3.2;
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshLambertMaterial({ color: col(wallHex) })
+  );
+  body.position.y = h / 2;
+  group.add(body);
+
+  // しましまの オーニング
+  const stripeCount = 5;
+  const stripeW = (w + 0.6) / stripeCount;
+  for (let i = 0; i < stripeCount; i++) {
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry(stripeW, 0.3, 1.0),
+      new THREE.MeshLambertMaterial({ color: col(i % 2 === 0 ? awningHex : "#fffdf5") })
+    );
+    stripe.position.set(-((w + 0.6) / 2) + stripeW * (i + 0.5), h - 0.1, d / 2 + 0.4);
+    group.add(stripe);
+  }
+
+  const signTex = makeSignTexture(p.food, "#fff8ec", awningHex);
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.7, 0.6),
+    new THREE.MeshLambertMaterial({ map: signTex })
+  );
+  sign.position.set(0, h + 0.5, d / 2 + 0.02);
+  group.add(sign);
+
+  // テラスせきの テーブルと パラソル
+  const terraceX = w / 2 + 0.9;
+  const terraceZ = d / 2 - 0.4;
+  const table = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.4, 0.4, 0.55, 12),
+    new THREE.MeshLambertMaterial({ color: col("#8a5a2b") })
+  );
+  table.position.set(terraceX, 0.275, terraceZ);
+  group.add(table);
+
+  const parasolPole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.04, 0.04, 1.3, 8),
+    new THREE.MeshLambertMaterial({ color: col("#adb5bd") })
+  );
+  parasolPole.position.set(terraceX, 0.9, terraceZ);
+  group.add(parasolPole);
+
+  const parasol = new THREE.Mesh(
+    new THREE.ConeGeometry(0.7, 0.4, 10),
+    new THREE.MeshLambertMaterial({ color: col(p.parasol) })
+  );
+  parasol.position.set(terraceX, 1.55, terraceZ);
+  group.add(parasol);
+
+  [-0.55, 0.55].forEach((cz) => {
+    const chair = new THREE.Mesh(
+      new THREE.BoxGeometry(0.35, 0.5, 0.35),
+      new THREE.MeshLambertMaterial({ color: col("#5b3a29") })
+    );
+    chair.position.set(terraceX, 0.25, terraceZ + cz);
+    group.add(chair);
+  });
+
+  const doorLocal = addDoorAndWindows(group, w / 2, h, doorHex, 1);
+
+  return { group, doorLocal, wallHex, label: "レストラン" };
+}
+
+const RESTAURANT_PALETTES = [
+  { wall: "#fff3e0", awning: "#e63946", parasol: "#e63946", food: "パスタ" },
+  { wall: "#ffe8d6", awning: "#43aa8b", parasol: "#43aa8b", food: "ピザ" },
+  { wall: "#f6e3c6", awning: "#f9c74f", parasol: "#f9c74f", food: "カレー" },
+  { wall: "#eef2f5", awning: "#48cae4", parasol: "#48cae4", food: "ハンバーグ" },
+];
+
 function createCinemaMesh(palette) {
   const p = palette || CINEMA_PALETTES[0];
   const wallHex = p.wall;
@@ -1479,6 +1562,7 @@ const STRUCTURE_FACTORIES = {
   park: createParkMesh,
   pond: createPondMesh,
   yatai: createYataiMesh,
+  restaurant: createRestaurantMesh,
 };
 const STRUCTURE_PALETTES = {
   house: HOUSE_PALETTES,
@@ -1489,6 +1573,7 @@ const STRUCTURE_PALETTES = {
   park: PARK_PALETTES,
   pond: POND_PALETTES,
   yatai: YATAI_PALETTES,
+  restaurant: RESTAURANT_PALETTES,
 };
 const STRUCTURE_RECIPES = {
   house: HOUSE_RECIPE,
@@ -1499,6 +1584,7 @@ const STRUCTURE_RECIPES = {
   park: PARK_RECIPE,
   pond: POND_RECIPE,
   yatai: YATAI_RECIPE,
+  restaurant: RESTAURANT_RECIPE,
 };
 const STRUCTURE_HAS_DOOR = {
   house: true,
@@ -1509,6 +1595,7 @@ const STRUCTURE_HAS_DOOR = {
   park: false,
   pond: false,
   yatai: false,
+  restaurant: true,
 };
 
 const placedStructures = []; // {type, x, z, doorWorld, wallHex, paletteIndex}
@@ -1553,6 +1640,7 @@ const STRUCTURE_LABELS = {
   park: "🌳 こうえん",
   pond: "🎣 いけ",
   yatai: "🏮 やたい",
+  restaurant: "🍝 レストラン",
 };
 
 document.getElementById("build-house-btn").addEventListener("click", () => requestBuild("house"));
@@ -1563,6 +1651,7 @@ document.getElementById("build-school-btn").addEventListener("click", () => requ
 document.getElementById("build-park-btn").addEventListener("click", () => requestBuild("park"));
 document.getElementById("build-pond-btn").addEventListener("click", () => requestBuild("pond"));
 document.getElementById("build-yatai-btn").addEventListener("click", () => requestBuild("yatai"));
+document.getElementById("build-restaurant-btn").addEventListener("click", () => requestBuild("restaurant"));
 
 // ==========================================================
 // くるま
@@ -1849,6 +1938,7 @@ const RECIPES = {
   bicycle: BICYCLE_RECIPE,
   pond: POND_RECIPE,
   yatai: YATAI_RECIPE,
+  restaurant: RESTAURANT_RECIPE,
 };
 const OBJECT_RADIUS = {
   house: 2.1,
@@ -1862,6 +1952,7 @@ const OBJECT_RADIUS = {
   car: 1.9,
   train: 2.6,
   bicycle: 1.0,
+  restaurant: 3.0,
 };
 
 // プレイヤーが すりぬけないように するための あたり判定
@@ -1879,6 +1970,7 @@ const COLLISION_RADIUS = {
   car: 1.3,
   train: 1.8,
   bicycle: 0.7,
+  restaurant: 2.3,
 };
 const PLAYER_COLLISION_RADIUS = 0.35;
 
@@ -1911,6 +2003,7 @@ const GHOST_DISTANCE = {
   train: 5,
   bicycle: 3,
   block: 2.4,
+  restaurant: 5,
 };
 const VEHICLE_LABELS = { car: "🚗 くるま", train: "🚂 でんしゃ", bicycle: "🚲 じてんしゃ" };
 
@@ -2738,6 +2831,7 @@ const INTERIOR_NPC_COLORS = {
   house: { shirt: "#43aa8b", pants: "#5b3a29" },
   cinema: { shirt: "#2b2b2b", pants: "#9d4edd" },
   school: { shirt: "#48cae4", pants: "#2d2d2d" },
+  restaurant: { shirt: "#ffffff", pants: "#2d2d2d" },
 };
 const INTERIOR_NPC_LABEL = {
   shop: "てんいんさん",
@@ -2745,6 +2839,7 @@ const INTERIOR_NPC_LABEL = {
   house: "かぞく",
   cinema: "えいがかんの スタッフ",
   school: "せんせい",
+  restaurant: "コックさん",
 };
 let interiorNpc = null;
 
@@ -3098,6 +3193,7 @@ const INTERIOR_TALK_LINES = {
   house: ["おかえりー！", "ごはん たべた?", "また あそびに きてね"],
   cinema: ["きょうは どの えいがを みる?", "ポップコーンも あるよ", "たのしんで いってね"],
   school: ["きょうも べんきょう がんばろうね！", "きゅうしょくは なにが すき?", "うんどうかいの れんしゅう しようか"],
+  restaurant: ["いらっしゃい！ なにを たべる?", "きょうの おすすめは とくべつだよ", "おなかいっぱい たべてね"],
 };
 
 function pickLine(lines) {
