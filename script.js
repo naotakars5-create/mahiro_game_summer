@@ -137,6 +137,7 @@ const soundBtn = document.getElementById("sound-btn");
 const attackBtn = document.getElementById("attack-btn");
 const feedBtn = document.getElementById("feed-btn");
 const talkBtn = document.getElementById("talk-btn");
+const cameraViewBtn = document.getElementById("camera-view-btn");
 const exitHouseBtn = document.getElementById("exit-house-btn");
 const exitCarBtn = document.getElementById("exit-car-btn");
 const confirmPlaceBtn = document.getElementById("confirm-place-btn");
@@ -166,6 +167,7 @@ function updateHud() {
   feedBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
   talkBtn.classList.toggle("hidden", driving || placing);
   soundBtn.classList.toggle("hidden", placing);
+  cameraViewBtn.classList.toggle("hidden", placing);
   exitHouseBtn.classList.toggle("hidden", mode !== "inside");
   exitCarBtn.classList.toggle("hidden", mode !== "town" || !driving || placing);
   confirmPlaceBtn.classList.toggle("hidden", !placing);
@@ -279,9 +281,18 @@ for (let i = 0; i < 6; i++) {
 // ==========================================================
 // フィールド（まち）の きほん サイズ
 // ==========================================================
-const FIELD_HALF_X = 50;
-const FIELD_HALF_Z = 44;
+const FIELD_HALF_X = 66;
+const FIELD_HALF_Z = 58;
 const ROAD_HALF_W = 6.5;
+const VERTICAL_ROAD_X = [0, 30];
+const HORIZONTAL_ROAD_Z = [-24, 24];
+
+function isOnRoad(x, z, margin) {
+  const m = margin || 0;
+  if (VERTICAL_ROAD_X.some((vx) => Math.abs(x - vx) < ROAD_HALF_W + m)) return true;
+  if (HORIZONTAL_ROAD_Z.some((hz) => Math.abs(z - hz) < ROAD_HALF_W + m)) return true;
+  return false;
+}
 
 const townGroup = new THREE.Group();
 scene.add(townGroup);
@@ -309,38 +320,57 @@ gridHelper.material.opacity = 0.12;
 gridHelper.position.y = 0.01;
 townGroup.add(gridHelper);
 
-// ---------- みち ----------
+// ---------- みち（どうろネットワーク：たてよこ の みちが こうさてんで まじわる） ----------
 const roadMat = new THREE.MeshLambertMaterial({ color: 0xd9c9a0 });
-const mainRoad = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF_W * 2, FIELD_HALF_Z * 2), roadMat);
-mainRoad.rotation.x = -Math.PI / 2;
-mainRoad.position.y = 0.015;
-townGroup.add(mainRoad);
+const dashMat = new THREE.MeshBasicMaterial({ color: 0xfff4d6 });
+const edgeLineMat = new THREE.MeshBasicMaterial({ color: 0xfff8ec });
 
-// まんなかの ダッシュせん
-const dashTemplate = new THREE.Mesh(
-  new THREE.PlaneGeometry(0.15, 1.4),
-  new THREE.MeshBasicMaterial({ color: 0xfff4d6 })
-);
-dashTemplate.rotation.x = -Math.PI / 2;
-for (let z = -FIELD_HALF_Z + 1; z < FIELD_HALF_Z; z += 3) {
-  const dash = dashTemplate.clone();
-  dash.position.set(0, 0.02, z);
-  townGroup.add(dash);
+function buildVerticalRoad(xCenter) {
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF_W * 2, FIELD_HALF_Z * 2), roadMat);
+  road.rotation.x = -Math.PI / 2;
+  road.position.set(xCenter, 0.015, 0);
+  townGroup.add(road);
+
+  for (let z = -FIELD_HALF_Z + 1; z < FIELD_HALF_Z; z += 3) {
+    if (HORIZONTAL_ROAD_Z.some((hz) => Math.abs(z - hz) < ROAD_HALF_W + 1)) continue; // こうさてんは あけておく
+    const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 1.4), dashMat);
+    dash.rotation.x = -Math.PI / 2;
+    dash.position.set(xCenter, 0.02, z);
+    townGroup.add(dash);
+  }
+  [-1, 1].forEach((side) => {
+    const edge = new THREE.Mesh(new THREE.PlaneGeometry(0.2, FIELD_HALF_Z * 2), edgeLineMat);
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.set(xCenter + side * (ROAD_HALF_W - 0.25), 0.02, 0);
+    townGroup.add(edge);
+  });
 }
 
-// りょうはしの しろい せん
-const edgeLineMat = new THREE.MeshBasicMaterial({ color: 0xfff8ec });
-[-1, 1].forEach((side) => {
-  const edge = new THREE.Mesh(new THREE.PlaneGeometry(0.2, FIELD_HALF_Z * 2), edgeLineMat);
-  edge.rotation.x = -Math.PI / 2;
-  edge.position.set(side * (ROAD_HALF_W - 0.25), 0.02, 0);
-  townGroup.add(edge);
-});
+function buildHorizontalRoad(zCenter) {
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(FIELD_HALF_X * 2, ROAD_HALF_W * 2), roadMat);
+  road.rotation.x = -Math.PI / 2;
+  road.position.set(0, 0.016, zCenter);
+  townGroup.add(road);
+
+  for (let x = -FIELD_HALF_X + 1; x < FIELD_HALF_X; x += 3) {
+    if (VERTICAL_ROAD_X.some((vx) => Math.abs(x - vx) < ROAD_HALF_W + 1)) continue; // こうさてんは あけておく
+    const dash = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.15), dashMat);
+    dash.rotation.x = -Math.PI / 2;
+    dash.position.set(x, 0.021, zCenter);
+    townGroup.add(dash);
+  }
+  [-1, 1].forEach((side) => {
+    const edge = new THREE.Mesh(new THREE.PlaneGeometry(FIELD_HALF_X * 2, 0.2), edgeLineMat);
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.set(0, 0.021, zCenter + side * (ROAD_HALF_W - 0.25));
+    townGroup.add(edge);
+  });
+}
+
+VERTICAL_ROAD_X.forEach(buildVerticalRoad);
+HORIZONTAL_ROAD_Z.forEach(buildHorizontalRoad);
 
 // ---------- き ----------
-function isInRoadZone(x) {
-  return Math.abs(x) < ROAD_HALF_W + 2;
-}
 
 const trees = []; // {x, z, group, shakeTimer}
 
@@ -366,14 +396,14 @@ function createTree(x, z) {
   trees.push({ x, z, group, shakeTimer: 0 });
 }
 
-for (let i = 0; i < 30; i++) {
+for (let i = 0; i < 46; i++) {
   let x, z;
   let tries = 0;
   do {
     x = (Math.random() * 2 - 1) * (FIELD_HALF_X - 3);
     z = (Math.random() * 2 - 1) * (FIELD_HALF_Z - 3);
     tries++;
-  } while (isInRoadZone(x) && tries < 20);
+  } while (isOnRoad(x, z, 2) && tries < 20);
   if (tries < 20) createTree(x, z);
 }
 
@@ -1072,26 +1102,46 @@ document.getElementById("build-bicycle-btn").addEventListener("click", () => req
 // どうろを はしる ほかの くるま（かざり）
 // ==========================================================
 const TRAFFIC_COLORS = ["#e63946", "#48cae4", "#f9c74f", "#43aa8b", "#9d4edd", "#f28482"];
-const trafficCars = []; // {mesh, x, z, dir, speed}
+const trafficCars = []; // {mesh, axis:'x'|'z', x, z, dir, speed}
 
-function spawnTrafficCar(dir) {
+function spawnTrafficCar(axis, roadCenter, dir) {
   const color = TRAFFIC_COLORS[Math.floor(Math.random() * TRAFFIC_COLORS.length)];
   const mesh = createCarMesh(color);
-  const lane = dir > 0 ? -ROAD_HALF_W * 0.45 : ROAD_HALF_W * 0.45;
-  const z = (Math.random() * 2 - 1) * FIELD_HALF_Z;
-  mesh.position.set(lane, 0, z);
-  mesh.rotation.y = dir > 0 ? 0 : Math.PI;
-  townGroup.add(mesh);
-  trafficCars.push({ mesh, x: lane, z, dir, speed: 5 + Math.random() * 3 });
+  const lane = roadCenter + (dir > 0 ? -ROAD_HALF_W * 0.45 : ROAD_HALF_W * 0.45);
+  if (axis === "z") {
+    const z = (Math.random() * 2 - 1) * FIELD_HALF_Z;
+    mesh.position.set(lane, 0, z);
+    mesh.rotation.y = dir > 0 ? 0 : Math.PI;
+    townGroup.add(mesh);
+    trafficCars.push({ mesh, axis, x: lane, z, dir, speed: 5 + Math.random() * 3 });
+  } else {
+    const x = (Math.random() * 2 - 1) * FIELD_HALF_X;
+    mesh.position.set(x, 0, lane);
+    mesh.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+    townGroup.add(mesh);
+    trafficCars.push({ mesh, axis, x, z: lane, dir, speed: 5 + Math.random() * 3 });
+  }
 }
-for (let i = 0; i < 3; i++) spawnTrafficCar(1);
-for (let i = 0; i < 3; i++) spawnTrafficCar(-1);
+VERTICAL_ROAD_X.forEach((vx) => {
+  for (let i = 0; i < 2; i++) spawnTrafficCar("z", vx, 1);
+  for (let i = 0; i < 2; i++) spawnTrafficCar("z", vx, -1);
+});
+HORIZONTAL_ROAD_Z.forEach((hz) => {
+  for (let i = 0; i < 2; i++) spawnTrafficCar("x", hz, 1);
+  for (let i = 0; i < 2; i++) spawnTrafficCar("x", hz, -1);
+});
 
 function updateTraffic(delta) {
   trafficCars.forEach((t) => {
-    t.z += t.dir * t.speed * delta;
-    if (t.z > FIELD_HALF_Z + 3) t.z = -FIELD_HALF_Z - 3;
-    if (t.z < -FIELD_HALF_Z - 3) t.z = FIELD_HALF_Z + 3;
+    if (t.axis === "z") {
+      t.z += t.dir * t.speed * delta;
+      if (t.z > FIELD_HALF_Z + 3) t.z = -FIELD_HALF_Z - 3;
+      if (t.z < -FIELD_HALF_Z - 3) t.z = FIELD_HALF_Z + 3;
+    } else {
+      t.x += t.dir * t.speed * delta;
+      if (t.x > FIELD_HALF_X + 3) t.x = -FIELD_HALF_X - 3;
+      if (t.x < -FIELD_HALF_X - 3) t.x = FIELD_HALF_X + 3;
+    }
     t.mesh.position.set(t.x, 0, t.z);
   });
 }
@@ -1301,7 +1351,7 @@ function isValidPlacement(kind, x, z) {
     return Math.abs(x) < FIELD_HALF_X - 1 && Math.abs(z) < FIELD_HALF_Z - 1;
   }
   if (Math.abs(x) > FIELD_HALF_X - 3 || Math.abs(z) > FIELD_HALF_Z - 3) return false;
-  if (!VEHICLE_KINDS.includes(kind) && Math.abs(x) < ROAD_HALF_W + 1.5) return false;
+  if (!VEHICLE_KINDS.includes(kind) && isOnRoad(x, z, 1.5)) return false;
   for (const s of placedStructures) {
     const minDist = OBJECT_RADIUS[s.type] + OBJECT_RADIUS[kind] + 0.6;
     if (Math.hypot(x - s.x, z - s.z) < minDist) return false;
@@ -2188,18 +2238,31 @@ function performTalk() {
 talkBtn.addEventListener("click", performTalk);
 
 // ==========================================================
-// カメラ
+// カメラ（してんを きりかえられる）
 // ==========================================================
-const CAM_OFFSET = new THREE.Vector3(0, 15, 17);
+const CAMERA_VIEWS = [
+  { label: "ふつう", offset: new THREE.Vector3(0, 15, 17), targetY: 1.2 },
+  { label: "ちかく", offset: new THREE.Vector3(0, 6, 8), targetY: 1.1 },
+  { label: "うえから", offset: new THREE.Vector3(0, 42, 0.01), targetY: 0 },
+];
+let cameraViewIndex = 0;
+
+function cycleCameraView() {
+  cameraViewIndex = (cameraViewIndex + 1) % CAMERA_VIEWS.length;
+  showMessage(`📷 してん: ${CAMERA_VIEWS[cameraViewIndex].label}`);
+}
+cameraViewBtn.addEventListener("click", cycleCameraView);
+
 const cameraTarget = new THREE.Vector3();
 const desiredCamPos = new THREE.Vector3();
 
 function updateCamera(pos, delta) {
+  const view = CAMERA_VIEWS[cameraViewIndex];
   const py = pos.y || 0;
-  desiredCamPos.set(pos.x + CAM_OFFSET.x, py + CAM_OFFSET.y, pos.z + CAM_OFFSET.z);
+  desiredCamPos.set(pos.x + view.offset.x, py + view.offset.y, pos.z + view.offset.z);
   const lerpAmt = 1 - Math.pow(0.001, delta);
   camera.position.lerp(desiredCamPos, lerpAmt);
-  cameraTarget.set(pos.x, py + 1.2, pos.z);
+  cameraTarget.set(pos.x, py + view.targetY, pos.z);
   camera.lookAt(cameraTarget);
 }
 
