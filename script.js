@@ -22,8 +22,9 @@ const SAVE_KEY = "legoTown3dSave_v1";
 let state = {
   inventory: { red: 0, gray: 0, blue: 0, yellow: 0, green: 0, purple: 0 },
   totalCollected: 0,
-  structures: [], // {type:'house'|'building'|'shop', x, z}
-  cars: [], // {x, z}
+  structures: [], // {type:'house'|'building'|'shop', x, z, paletteIndex}
+  cars: [], // {x, z, colorIndex}
+  toyBlocks: [], // {x, y, z, colorKey}
   soundOn: true,
 };
 
@@ -57,6 +58,7 @@ function saveState() {
       totalCollected: state.totalCollected,
       structures: state.structures,
       cars: state.cars,
+      toyBlocks: state.toyBlocks,
       soundOn: state.soundOn,
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(toSave));
@@ -104,22 +106,35 @@ function playTone(freq, duration) {
 const titleScreen = document.getElementById("title-screen");
 const gameScreen = document.getElementById("game-screen");
 const soundBtn = document.getElementById("sound-btn");
+const attackBtn = document.getElementById("attack-btn");
 const exitHouseBtn = document.getElementById("exit-house-btn");
 const exitCarBtn = document.getElementById("exit-car-btn");
+const confirmPlaceBtn = document.getElementById("confirm-place-btn");
+const cancelPlaceBtn = document.getElementById("cancel-place-btn");
+const doneToyBtn = document.getElementById("done-toy-btn");
+const toyPaletteEl = document.getElementById("toy-palette");
 const buildButtons = [
   document.getElementById("build-house-btn"),
   document.getElementById("build-building-btn"),
   document.getElementById("build-shop-btn"),
   document.getElementById("build-car-btn"),
+  document.getElementById("build-toy-btn"),
 ];
 
 let mode = "town"; // 'town' | 'inside'
 
 function updateHud() {
   const driving = !!drivingCar;
-  buildButtons.forEach((b) => b.classList.toggle("hidden", mode === "inside"));
+  const placing = !!placementKind;
+  buildButtons.forEach((b) => b.classList.toggle("hidden", mode === "inside" || placing || driving));
+  attackBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
+  soundBtn.classList.toggle("hidden", placing);
   exitHouseBtn.classList.toggle("hidden", mode !== "inside");
-  exitCarBtn.classList.toggle("hidden", mode !== "town" || !driving);
+  exitCarBtn.classList.toggle("hidden", mode !== "town" || !driving || placing);
+  confirmPlaceBtn.classList.toggle("hidden", !placing);
+  doneToyBtn.classList.toggle("hidden", placementKind !== "block");
+  cancelPlaceBtn.classList.toggle("hidden", !placing || placementKind === "block");
+  toyPaletteEl.classList.toggle("hidden", placementKind !== "block");
 }
 
 let messageTimer = null;
@@ -219,22 +234,6 @@ const FIELD_HALF_X = 34;
 const FIELD_HALF_Z = 30;
 const ROAD_HALF_W = 3.2;
 
-const PLOT_COLS = [-16, 16];
-const PLOT_ROWS = [-22, -11, 0, 11, 22];
-const PLOTS = [];
-PLOT_COLS.forEach((x) => {
-  PLOT_ROWS.forEach((z) => {
-    PLOTS.push({ x, z, doorSign: x < 0 ? 1 : -1 });
-  });
-});
-
-const CAR_SPOTS = [
-  { x: 0, z: -24 },
-  { x: 0, z: -8 },
-  { x: 0, z: 8 },
-  { x: 0, z: 24 },
-];
-
 const townGroup = new THREE.Group();
 scene.add(townGroup);
 
@@ -288,9 +287,8 @@ for (let i = -1; i <= 1; i += 2) {
 function isInRoadZone(x) {
   return Math.abs(x) < ROAD_HALF_W + 2;
 }
-function isInPlotZone(x) {
-  return PLOT_COLS.some((px) => Math.abs(x - px) < 5);
-}
+
+const trees = []; // {x, z, group, shakeTimer}
 
 function createTree(x, z) {
   const group = new THREE.Group();
@@ -311,6 +309,7 @@ function createTree(x, z) {
   }
   group.position.set(x, 0, z);
   townGroup.add(group);
+  trees.push({ x, z, group, shakeTimer: 0 });
 }
 
 for (let i = 0; i < 16; i++) {
@@ -320,7 +319,7 @@ for (let i = 0; i < 16; i++) {
     x = (Math.random() * 2 - 1) * (FIELD_HALF_X - 3);
     z = (Math.random() * 2 - 1) * (FIELD_HALF_Z - 3);
     tries++;
-  } while ((isInRoadZone(x) || isInPlotZone(x)) && tries < 20);
+  } while (isInRoadZone(x) && tries < 20);
   if (tries < 20) createTree(x, z);
 }
 
@@ -383,19 +382,20 @@ function createHumanoid(opts) {
 
   return {
     group,
-    animate(phase, moving) {
+    animate(phase, moving, punch) {
       const swing = moving ? Math.sin(phase) * 0.9 : 0;
       leftLeg.rotation.x = swing;
       rightLeg.rotation.x = -swing;
       leftArm.rotation.x = -swing;
-      rightArm.rotation.x = swing;
+      rightArm.rotation.x = punch ? -1.6 * punch : swing;
     },
   };
 }
 
 // ---------- プレイヤー ----------
+// たてものの なかに 入っても きえないように townGroup ではなく scene に ちょくせつ おく
 const playerRig = createHumanoid({ skin: "#f4c98f", shirt: "#5cc4f2", pants: "#3a4a63", scale: 1 });
-townGroup.add(playerRig.group);
+scene.add(playerRig.group);
 
 const player = {
   x: 0,
@@ -405,6 +405,8 @@ const player = {
 };
 
 let walkPhase = 0;
+let attackTimer = 0;
+const ATTACK_DURATION = 0.35;
 const keys = { up: false, down: false, left: false, right: false };
 
 function applyMovement(entityPos, speed, delta, onFacing) {
@@ -639,36 +641,11 @@ function placeStructureMesh(type, x, z, paletteIndex) {
   return idx;
 }
 
-function findEmptyPlot() {
-  return PLOTS.find((plot) => !placedStructures.some((s) => s.x === plot.x && s.z === plot.z));
-}
+const STRUCTURE_LABELS = { house: "🏠 いえ", building: "🏢 ビル", shop: "🏪 おみせ" };
 
-function attemptBuild(type, buttonLabel) {
-  const recipe = STRUCTURE_RECIPES[type];
-  for (const key in recipe) {
-    if (state.inventory[key] < recipe[key]) {
-      const c = COLORS.find((x) => x.key === key);
-      showMessage(`「${c.name}」の ブロックが あと ${recipe[key] - state.inventory[key]}こ たりないよ`);
-      return;
-    }
-  }
-  const plot = findEmptyPlot();
-  if (!plot) {
-    showMessage("まちに もう あきちが ないよ！");
-    return;
-  }
-  const paletteIndex = placeStructureMesh(type, plot.x, plot.z);
-  state.structures.push({ type, x: plot.x, z: plot.z, paletteIndex });
-  for (const key in recipe) state.inventory[key] -= recipe[key];
-  playTone(900, 0.2);
-  showMessage(`${buttonLabel} が まちに たった！ドアから 入れるよ`);
-  renderInventory();
-  saveState();
-}
-
-document.getElementById("build-house-btn").addEventListener("click", () => attemptBuild("house", "🏠 いえ"));
-document.getElementById("build-building-btn").addEventListener("click", () => attemptBuild("building", "🏢 ビル"));
-document.getElementById("build-shop-btn").addEventListener("click", () => attemptBuild("shop", "🏪 おみせ"));
+document.getElementById("build-house-btn").addEventListener("click", () => requestBuild("house"));
+document.getElementById("build-building-btn").addEventListener("click", () => requestBuild("building"));
+document.getElementById("build-shop-btn").addEventListener("click", () => requestBuild("shop"));
 
 // ==========================================================
 // くるま
@@ -709,39 +686,12 @@ function createCarMesh(bodyHex) {
 const CAR_COLORS = ["#e63946", "#48cae4", "#f9c74f", "#43aa8b"];
 const placedCars = []; // {x, z, mesh, facing}
 
-function findEmptyCarSpot() {
-  return CAR_SPOTS.find((spot) => !placedCars.some((c) => c.x === spot.x && c.z === spot.z));
-}
-
 function pickCarColor() {
   const used = placedCars.map((c) => c.colorIndex);
   const all = CAR_COLORS.map((_, i) => i);
   const unused = all.filter((i) => !used.includes(i));
   const pool = unused.length ? unused : all;
   return pool[Math.floor(Math.random() * pool.length)];
-}
-
-function attemptBuildCar() {
-  for (const key in CAR_RECIPE) {
-    if (state.inventory[key] < CAR_RECIPE[key]) {
-      const c = COLORS.find((x) => x.key === key);
-      showMessage(`「${c.name}」の ブロックが あと ${CAR_RECIPE[key] - state.inventory[key]}こ たりないよ`);
-      return;
-    }
-  }
-  const spot = findEmptyCarSpot();
-  if (!spot) {
-    showMessage("もう くるまを おく ばしょが ないよ！");
-    return;
-  }
-  const colorIndex = spawnCar(spot.x, spot.z);
-  state.cars.push({ x: spot.x, z: spot.z, colorIndex });
-  for (const key in CAR_RECIPE) state.inventory[key] -= CAR_RECIPE[key];
-  playTone(500, 0.15);
-  playTone(750, 0.15);
-  showMessage("🚗 くるまが できた！ちかづくと のれるよ");
-  renderInventory();
-  saveState();
 }
 
 function spawnCar(x, z, colorIndex) {
@@ -753,7 +703,266 @@ function spawnCar(x, z, colorIndex) {
   return idx;
 }
 
-document.getElementById("build-car-btn").addEventListener("click", attemptBuildCar);
+document.getElementById("build-car-btn").addEventListener("click", () => requestBuild("car"));
+
+// ==========================================================
+// おもちゃ（じゆうに おける ブロック）
+// ==========================================================
+const TOY_SIZE = 0.7;
+const MAX_TOY_BLOCKS = 220;
+const toyBlocks = []; // {x, y, z, colorKey, mesh}
+
+function createToyBlockMesh(hex) {
+  const group = new THREE.Group();
+  const cube = new THREE.Mesh(
+    new THREE.BoxGeometry(TOY_SIZE, TOY_SIZE, TOY_SIZE),
+    new THREE.MeshLambertMaterial({ color: col(hex) })
+  );
+  group.add(cube);
+  const stud = new THREE.Mesh(
+    new THREE.CylinderGeometry(TOY_SIZE * 0.22, TOY_SIZE * 0.22, TOY_SIZE * 0.2, 10),
+    new THREE.MeshLambertMaterial({ color: col(shadeColor(hex, -10)) })
+  );
+  stud.position.y = TOY_SIZE / 2 + TOY_SIZE * 0.1;
+  group.add(stud);
+  return group;
+}
+
+function toyStackY(gx, gz) {
+  const count = toyBlocks.filter((b) => Math.abs(b.x - gx) < 0.01 && Math.abs(b.z - gz) < 0.01).length;
+  return TOY_SIZE / 2 + count * TOY_SIZE;
+}
+
+function placeToyBlockAt(x, z, colorKey) {
+  const gx = Math.round(x / TOY_SIZE) * TOY_SIZE;
+  const gz = Math.round(z / TOY_SIZE) * TOY_SIZE;
+  const y = toyStackY(gx, gz);
+  const mesh = createToyBlockMesh(colorHex(colorKey));
+  mesh.position.set(gx, y, gz);
+  townGroup.add(mesh);
+  const entry = { x: gx, y, z: gz, colorKey };
+  toyBlocks.push(entry);
+  return entry;
+}
+
+// ==========================================================
+// たてる ばしょを じぶんで えらぶ（プレースメント モード）
+// ==========================================================
+const RECIPES = { house: HOUSE_RECIPE, building: BUILDING_RECIPE, shop: SHOP_RECIPE, car: CAR_RECIPE };
+const OBJECT_RADIUS = { house: 2.1, building: 2.4, shop: 2.4, car: 1.9 };
+const GHOST_DISTANCE = { house: 4.5, building: 5, shop: 4.5, car: 4, block: 2.4 };
+
+let placementKind = null; // null | 'house' | 'building' | 'shop' | 'car' | 'block'
+let placementGhost = null;
+let placementGhostPaletteIndex = null;
+let placementColorKey = "red";
+let placementGhostX = 0;
+let placementGhostZ = 0;
+let placementValid = false;
+
+const placementReticle = new THREE.Mesh(
+  new THREE.CircleGeometry(1, 32),
+  new THREE.MeshBasicMaterial({ color: 0x2ecc71, transparent: true, opacity: 0.5 })
+);
+placementReticle.rotation.x = -Math.PI / 2;
+placementReticle.position.y = 0.02;
+placementReticle.visible = false;
+townGroup.add(placementReticle);
+
+function makeGhostTransparent(group) {
+  group.traverse((obj) => {
+    if (!obj.isMesh) return;
+    const applyOpacity = (m) => {
+      m.transparent = true;
+      m.opacity = 0.55;
+      m.depthWrite = false;
+    };
+    if (Array.isArray(obj.material)) obj.material.forEach(applyOpacity);
+    else applyOpacity(obj.material);
+  });
+  return group;
+}
+
+function clearGhost() {
+  if (placementGhost) {
+    townGroup.remove(placementGhost);
+    placementGhost = null;
+  }
+}
+
+function requestBuild(kind) {
+  if (mode !== "town") return;
+  if (drivingCar) {
+    showMessage("くるまを おりてから やってね");
+    return;
+  }
+  if (placementKind) return;
+  const recipe = RECIPES[kind];
+  for (const key in recipe) {
+    if (state.inventory[key] < recipe[key]) {
+      const c = COLORS.find((x) => x.key === key);
+      showMessage(`「${c.name}」の ブロックが あと ${recipe[key] - state.inventory[key]}こ たりないよ`);
+      return;
+    }
+  }
+  startPlacement(kind);
+}
+
+function startPlacement(kind) {
+  placementKind = kind;
+  clearGhost();
+  if (kind === "car") {
+    const idx = pickCarColor();
+    placementGhostPaletteIndex = idx;
+    placementGhost = createCarMesh(CAR_COLORS[idx]);
+  } else {
+    const idx = pickPaletteIndex(kind);
+    placementGhostPaletteIndex = idx;
+    placementGhost = STRUCTURE_FACTORIES[kind](STRUCTURE_PALETTES[kind][idx]).group;
+  }
+  makeGhostTransparent(placementGhost);
+  townGroup.add(placementGhost);
+  placementReticle.scale.setScalar(OBJECT_RADIUS[kind] || 2);
+  placementReticle.visible = true;
+  confirmPlaceBtn.textContent = "✅ ここに たてる";
+  showMessage("あるいて ばしょを きめて「ここに たてる」を おそう");
+  updateHud();
+}
+
+function startToyPlacement() {
+  const unlocked = unlockedColors();
+  const withStock = unlocked.filter((c) => state.inventory[c.key] > 0);
+  placementColorKey = (withStock[0] || unlocked[0]).key;
+  placementKind = "block";
+  clearGhost();
+  placementGhost = createToyBlockMesh(colorHex(placementColorKey));
+  makeGhostTransparent(placementGhost);
+  townGroup.add(placementGhost);
+  placementReticle.scale.setScalar(TOY_SIZE * 0.6);
+  placementReticle.visible = true;
+  confirmPlaceBtn.textContent = "✅ ここに おく";
+  renderToyPalette();
+  showMessage("いろを えらんで、すきな ばしょに ブロックを おこう！");
+  updateHud();
+}
+document.getElementById("build-toy-btn").addEventListener("click", () => {
+  if (mode !== "town" || drivingCar || placementKind) return;
+  startToyPlacement();
+});
+
+function renderToyPalette() {
+  toyPaletteEl.innerHTML = "";
+  unlockedColors().forEach((c) => {
+    const btn = document.createElement("button");
+    btn.className = "toy-swatch" + (c.key === placementColorKey ? " selected" : "");
+    btn.style.background = c.hex;
+    btn.title = `${c.name} × ${state.inventory[c.key]}`;
+    btn.addEventListener("click", () => {
+      placementColorKey = c.key;
+      clearGhost();
+      placementGhost = createToyBlockMesh(colorHex(placementColorKey));
+      makeGhostTransparent(placementGhost);
+      townGroup.add(placementGhost);
+      renderToyPalette();
+    });
+    toyPaletteEl.appendChild(btn);
+  });
+}
+
+function isValidPlacement(kind, x, z) {
+  if (kind === "block") {
+    return Math.abs(x) < FIELD_HALF_X - 1 && Math.abs(z) < FIELD_HALF_Z - 1;
+  }
+  if (Math.abs(x) > FIELD_HALF_X - 3 || Math.abs(z) > FIELD_HALF_Z - 3) return false;
+  if (kind !== "car" && Math.abs(x) < ROAD_HALF_W + 1.5) return false;
+  for (const s of placedStructures) {
+    const minDist = OBJECT_RADIUS[s.type] + OBJECT_RADIUS[kind] + 0.6;
+    if (Math.hypot(x - s.x, z - s.z) < minDist) return false;
+  }
+  for (const c of placedCars) {
+    const minDist = OBJECT_RADIUS.car + OBJECT_RADIUS[kind] + 0.6;
+    if (Math.hypot(x - c.x, z - c.z) < minDist) return false;
+  }
+  for (const t of trees) {
+    if (Math.hypot(x - t.x, z - t.z) < OBJECT_RADIUS[kind] + 1.6) return false;
+  }
+  return true;
+}
+
+function updatePlacementFrame() {
+  const dist = GHOST_DISTANCE[placementKind];
+  let x = player.x + Math.sin(player.facing) * dist;
+  let z = player.z + Math.cos(player.facing) * dist;
+  if (placementKind === "block") {
+    x = Math.round(x / TOY_SIZE) * TOY_SIZE;
+    z = Math.round(z / TOY_SIZE) * TOY_SIZE;
+  }
+  placementGhostX = x;
+  placementGhostZ = z;
+  placementValid = isValidPlacement(placementKind, x, z);
+
+  const y = placementKind === "block" ? toyStackY(x, z) - TOY_SIZE / 2 : 0;
+  placementGhost.position.set(x, y, z);
+  placementReticle.position.set(x, 0.02, z);
+  placementReticle.material.color.set(placementValid ? 0x2ecc71 : 0xe74c3c);
+}
+
+function confirmPlacement() {
+  if (!placementKind) return;
+  const kind = placementKind;
+  const x = placementGhostX;
+  const z = placementGhostZ;
+  if (!placementValid) {
+    showMessage("ここには おけないよ。ばしょを かえてね");
+    playTone(220, 0.12);
+    return;
+  }
+  if (kind === "block") {
+    if (state.inventory[placementColorKey] <= 0) {
+      showMessage("その いろの ブロックが ないよ");
+      return;
+    }
+    if (toyBlocks.length >= MAX_TOY_BLOCKS) {
+      showMessage("もう おもちゃが いっぱいだよ！");
+      return;
+    }
+    const entry = placeToyBlockAt(x, z, placementColorKey);
+    state.inventory[placementColorKey]--;
+    state.toyBlocks.push(entry);
+    playTone(520, 0.08);
+    renderInventory();
+    renderToyPalette();
+    saveState();
+    return;
+  }
+
+  const recipe = RECIPES[kind];
+  for (const key in recipe) state.inventory[key] -= recipe[key];
+  if (kind === "car") {
+    spawnCar(x, z, placementGhostPaletteIndex);
+    state.cars.push({ x, z, colorIndex: placementGhostPaletteIndex });
+    showMessage("🚗 くるまが できた！ちかづくと のれるよ");
+  } else {
+    placeStructureMesh(kind, x, z, placementGhostPaletteIndex);
+    state.structures.push({ type: kind, x, z, paletteIndex: placementGhostPaletteIndex });
+    showMessage(`${STRUCTURE_LABELS[kind]} が まちに たった！ドアから 入れるよ`);
+  }
+  playTone(900, 0.2);
+  renderInventory();
+  saveState();
+  exitPlacement();
+}
+
+function exitPlacement() {
+  placementKind = null;
+  clearGhost();
+  placementReticle.visible = false;
+  updateHud();
+}
+
+confirmPlaceBtn.addEventListener("click", confirmPlacement);
+cancelPlaceBtn.addEventListener("click", exitPlacement);
+doneToyBtn.addEventListener("click", exitPlacement);
 
 let drivingCar = null;
 
@@ -783,6 +992,12 @@ exitCarBtn.addEventListener("click", exitCarFn);
 function rebuildFromState() {
   state.structures.forEach((s) => placeStructureMesh(s.type, s.x, s.z, s.paletteIndex));
   state.cars.forEach((c) => spawnCar(c.x, c.z, c.colorIndex));
+  state.toyBlocks.forEach((b) => {
+    const mesh = createToyBlockMesh(colorHex(b.colorKey));
+    mesh.position.set(b.x, b.y, b.z);
+    townGroup.add(mesh);
+    toyBlocks.push(b);
+  });
 }
 
 // ==========================================================
@@ -792,8 +1007,8 @@ const fieldBlocks = []; // {mesh, colorKey, baseY}
 const MAX_FIELD_BLOCKS = 16;
 
 function isNearAnyStructureOrCar(x, z, radius) {
-  if (PLOTS.some((p) => Math.hypot(x - p.x, z - p.z) < radius)) return true;
-  if (CAR_SPOTS.some((p) => Math.hypot(x - p.x, z - p.z) < radius)) return true;
+  if (placedStructures.some((p) => Math.hypot(x - p.x, z - p.z) < radius)) return true;
+  if (placedCars.some((p) => Math.hypot(x - p.x, z - p.z) < radius)) return true;
   return false;
 }
 
@@ -961,6 +1176,28 @@ const insideWallMat = new THREE.MeshLambertMaterial({ color: 0xf6e3c6 });
   insideGroup.add(leaf);
 }
 
+// ---------- たてものの なかの ひと（てんいん・かぞく） ----------
+const INTERIOR_NPC_COLORS = {
+  shop: { shirt: "#ffffff", pants: "#e63946" },
+  building: { shirt: "#5b3a29", pants: "#2d2d2d" },
+  house: { shirt: "#43aa8b", pants: "#5b3a29" },
+};
+const INTERIOR_NPC_LABEL = { shop: "てんいんさん", building: "けいびいん", house: "かぞく" };
+let interiorNpc = null;
+
+function setupInteriorNpc(type) {
+  if (interiorNpc) {
+    insideGroup.remove(interiorNpc.rig.group);
+    interiorNpc = null;
+  }
+  const cfg = INTERIOR_NPC_COLORS[type] || INTERIOR_NPC_COLORS.house;
+  const rig = createHumanoid({ skin: "#f4c98f", shirt: cfg.shirt, pants: cfg.pants, scale: 0.95 });
+  rig.group.position.set(1.6, 0, -0.6);
+  rig.group.rotation.y = 0;
+  insideGroup.add(rig.group);
+  interiorNpc = { rig, phase: 0 };
+}
+
 let currentBuilding = null;
 let outsidePlayerPos = { x: 0, z: 4 };
 
@@ -968,13 +1205,14 @@ function enterBuilding(structure) {
   currentBuilding = structure;
   outsidePlayerPos = { x: player.x, z: player.z };
   insideWallMat.color = col(shadeColor(structure.wallHex, 55));
+  setupInteriorNpc(structure.type);
   townGroup.visible = false;
   insideGroup.visible = true;
   mode = "inside";
   player.x = 0;
   player.z = 2.6;
   playTone(600, 0.15);
-  showMessage(`${structure.label} の なかに はいったよ`);
+  showMessage(`${structure.label} の なかに はいったよ（${INTERIOR_NPC_LABEL[structure.type] || "だれか"}が いるよ）`);
   updateHud();
 }
 
@@ -1122,6 +1360,7 @@ function spawnNpc(rig, options) {
     phase: Math.random() * Math.PI * 2,
     isFlyer: !!options.isFlyer,
     flyHeight: options.flyHeight || 0,
+    hopTimer: 0,
   };
   npc.rig.group.position.set(npc.x, npc.isFlyer ? npc.flyHeight : 0, npc.z);
   npcs.push(npc);
@@ -1153,24 +1392,55 @@ function updateNpc(npc, delta, time) {
   const dz = npc.target.z - npc.z;
   const dist = Math.hypot(dx, dz);
   const moving = dist > 0.1;
+  const speed = npc.hopTimer > 0 ? npc.speed * 2.4 : npc.speed;
   if (moving) {
     const nx = dx / dist;
     const nz = dz / dist;
-    npc.x += nx * npc.speed * delta;
-    npc.z += nz * npc.speed * delta;
+    npc.x += nx * speed * delta;
+    npc.z += nz * speed * delta;
     npc.facing = Math.atan2(nx, nz);
   }
-  npc.phase += delta * 6;
+  npc.phase += delta * (npc.hopTimer > 0 ? 14 : 6);
   npc.rig.group.position.x = npc.x;
   npc.rig.group.position.z = npc.z;
   npc.rig.group.rotation.y = npc.facing;
+  let hopOffset = 0;
+  if (npc.hopTimer > 0) {
+    npc.hopTimer -= delta;
+    hopOffset = Math.max(0, Math.sin((0.4 - npc.hopTimer) * 8)) * 0.5;
+  }
   if (npc.isFlyer) {
-    npc.rig.group.position.y = npc.flyHeight + Math.sin(time * 2 + npc.phase) * 0.3;
+    npc.rig.group.position.y = npc.flyHeight + Math.sin(time * 2 + npc.phase) * 0.3 + hopOffset;
     npc.rig.animate(npc.phase, moving);
   } else {
+    npc.rig.group.position.y = hopOffset;
     npc.rig.animate(npc.phase, moving);
   }
 }
+
+// ---------- こうげき（パンチ） ----------
+function performAttack() {
+  if (mode !== "town" || drivingCar || placementKind) return;
+  attackTimer = ATTACK_DURATION;
+  playTone(220, 0.1);
+  npcs.forEach((npc) => {
+    const d = Math.hypot(npc.x - player.x, npc.z - player.z);
+    if (d < 3.2 && d > 0.01) {
+      npc.hopTimer = 0.4;
+      const awayX = (npc.x - player.x) / d;
+      const awayZ = (npc.z - player.z) / d;
+      npc.target = {
+        x: Math.max(-NPC_WANDER_HALF_X, Math.min(NPC_WANDER_HALF_X, npc.x + awayX * 8 + (Math.random() * 4 - 2))),
+        z: Math.max(-NPC_WANDER_HALF_Z, Math.min(NPC_WANDER_HALF_Z, npc.z + awayZ * 8 + (Math.random() * 4 - 2))),
+      };
+    }
+  });
+  trees.forEach((t) => {
+    const d = Math.hypot(t.x - player.x, t.z - player.z);
+    if (d < 2.6) t.shakeTimer = 0.6;
+  });
+}
+attackBtn.addEventListener("click", performAttack);
 
 // ==========================================================
 // カメラ
@@ -1263,6 +1533,13 @@ function animate() {
 
   if (!started) return;
 
+  let punchAmount = 0;
+  if (attackTimer > 0) {
+    attackTimer = Math.max(0, attackTimer - delta);
+    const t = Math.min(1, 1 - attackTimer / ATTACK_DURATION);
+    punchAmount = Math.sin(t * Math.PI);
+  }
+
   if (mode === "inside") {
     const moving = applyMovement(player, 3.5, delta, (a) => (player.facing = a));
     player.x = Math.max(-3.9, Math.min(3.9, player.x));
@@ -1271,6 +1548,10 @@ function animate() {
     playerRig.group.rotation.y = player.facing;
     if (moving) walkPhase += delta * 8;
     playerRig.animate(walkPhase, moving);
+    if (interiorNpc) {
+      interiorNpc.phase += delta * 1.4;
+      interiorNpc.rig.animate(interiorNpc.phase, true);
+    }
     updateInsideCamera(player, delta);
   } else {
     if (drivingCar) {
@@ -1292,14 +1573,27 @@ function animate() {
       playerRig.group.position.set(player.x, 0, player.z);
       playerRig.group.rotation.y = player.facing;
       if (moving) walkPhase += delta * 8;
-      playerRig.animate(walkPhase, moving);
+      playerRig.animate(walkPhase, moving, punchAmount);
       checkBlockCollisions(player);
-      checkDoors(player);
-      checkCarBoarding(player);
+      if (placementKind) {
+        updatePlacementFrame();
+      } else {
+        checkDoors(player);
+        checkCarBoarding(player);
+      }
       updateCamera(player, delta);
     }
 
     npcs.forEach((npc) => updateNpc(npc, delta, time));
+
+    trees.forEach((t) => {
+      if (t.shakeTimer > 0) {
+        t.shakeTimer = Math.max(0, t.shakeTimer - delta);
+        t.group.rotation.z = Math.sin(time * 40) * t.shakeTimer * 0.4;
+      } else if (t.group.rotation.z !== 0) {
+        t.group.rotation.z = 0;
+      }
+    });
 
     fieldBlocks.forEach((b) => {
       b.spin += delta * 1.4;

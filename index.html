@@ -18,9 +18,10 @@
       <ol>
         <li>やじるしキー（or したの ボタン）で うごく</li>
         <li>まちの ブロックに ふれると あつまるよ</li>
-        <li>「いえ」「ビル」「おみせ」ボタンで まちに たてものが たつよ</li>
-        <li>たてもののドアに ちかづくと、なかに 入れるよ</li>
-        <li>「くるま」を つくって ちかづくと のれるよ</li>
+        <li>「いえ」「ビル」「おみせ」「くるま」ボタンで たてる ばしょを えらんで「たてる」を おそう</li>
+        <li>たてもののドアに ちかづくと、なかに 入れるよ（お店には 店員さんも いるよ）</li>
+        <li>「おもちゃ」ボタンで じぶんだけの さくひんを つくれるよ</li>
+        <li>「こうげき」ボタンで パンチ！どうぶつが びっくりして にげるよ</li>
       </ol>
     </div>
   </div>
@@ -31,14 +32,20 @@
       <div id="inventory" class="inventory"></div>
       <div class="topbar-buttons">
         <button id="sound-btn" class="mini-btn">🔊</button>
-        <button id="build-house-btn" class="mini-btn">🏠 いえ</button>
-        <button id="build-building-btn" class="mini-btn">🏢 ビル</button>
-        <button id="build-shop-btn" class="mini-btn">🏪 おみせ</button>
-        <button id="build-car-btn" class="mini-btn">🚗 くるま</button>
+        <button id="attack-btn" class="mini-btn">🤜 こうげき</button>
+        <button id="build-house-btn" class="mini-btn build-trigger">🏠 いえ</button>
+        <button id="build-building-btn" class="mini-btn build-trigger">🏢 ビル</button>
+        <button id="build-shop-btn" class="mini-btn build-trigger">🏪 おみせ</button>
+        <button id="build-car-btn" class="mini-btn build-trigger">🚗 くるま</button>
+        <button id="build-toy-btn" class="mini-btn build-trigger">🧸 おもちゃ</button>
         <button id="exit-house-btn" class="mini-btn hidden">◀ そとに でる</button>
         <button id="exit-car-btn" class="mini-btn hidden">🚪 くるまを おりる</button>
+        <button id="confirm-place-btn" class="mini-btn hidden">✅ ここに たてる</button>
+        <button id="done-toy-btn" class="mini-btn hidden">👍 できた！</button>
+        <button id="cancel-place-btn" class="mini-btn danger hidden">✖ やめる</button>
       </div>
     </div>
+    <div id="toy-palette" class="inventory hidden"></div>
     <div id="game-message"></div>
     <div class="canvas-stage">
       <canvas id="game-canvas"></canvas>

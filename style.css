@@ -142,6 +142,31 @@ body {
   border: 2px solid rgba(0,0,0,0.25);
 }
 
+#toy-palette {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 12px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+}
+
+.toy-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 3px solid transparent;
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
+}
+
+.toy-swatch.selected {
+  border-color: #333;
+  transform: translateY(1px) scale(1.08);
+}
+
+.mini-btn.build-trigger.active {
+  outline: 3px solid #2d3436;
+}
+
 /* ---------- ゲームがめん（3Dワールド） ---------- */
 #game-message {
   min-height: 1.6em;
