@@ -25,6 +25,7 @@ const BUILDING_RECIPE = { gray: 6, blue: 5, yellow: 2 };
 const SHOP_RECIPE = { yellow: 4, red: 3, blue: 2 };
 const CINEMA_RECIPE = { gray: 5, red: 4, yellow: 4, blue: 2 };
 const PARK_RECIPE = { green: 5, yellow: 3, blue: 2 };
+const SCHOOL_RECIPE = { gray: 6, red: 4, blue: 4, yellow: 3 };
 const POND_RECIPE = { blue: 4, gray: 2 };
 const CAR_RECIPE = { red: 5, gray: 4, blue: 3 };
 const TRAIN_RECIPE = { gray: 8, blue: 4, yellow: 3, red: 2 };
@@ -177,6 +178,7 @@ const buildButtons = [
   document.getElementById("build-building-btn"),
   document.getElementById("build-shop-btn"),
   document.getElementById("build-cinema-btn"),
+  document.getElementById("build-school-btn"),
   document.getElementById("build-park-btn"),
   document.getElementById("build-pond-btn"),
   document.getElementById("build-car-btn"),
@@ -979,6 +981,67 @@ const CINEMA_PALETTES = [
   { wall: "#5b3a29", marquee: "#48cae4", text: "えいがかん" },
 ];
 
+function createSchoolMesh(palette) {
+  const p = palette || SCHOOL_PALETTES[0];
+  const wallHex = p.wall;
+  const winHex = p.win;
+  const doorHex = p.door;
+  const group = new THREE.Group();
+
+  const w = 5.6;
+  const h = 4.2;
+  const d = 3.4;
+  const plainMat = new THREE.MeshLambertMaterial({ color: col(wallHex) });
+  const winTex = makeWindowTexture(2, 6, wallHex, winHex);
+  const winMat = new THREE.MeshLambertMaterial({ map: winTex });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [plainMat, plainMat, plainMat, plainMat, winMat, plainMat]);
+  body.position.y = h / 2;
+  group.add(body);
+
+  const roofCap = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.2, 0.3, d + 0.2),
+    new THREE.MeshLambertMaterial({ color: col(shadeColor(wallHex, -20)) })
+  );
+  roofCap.position.y = h + 0.15;
+  group.add(roofCap);
+
+  const signTex = makeSignTexture("がっこう", "#ffffff", doorHex);
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.0, 0.7),
+    new THREE.MeshLambertMaterial({ map: signTex })
+  );
+  sign.position.set(0, h + 0.65, d / 2 + 0.02);
+  group.add(sign);
+
+  // こっきポール
+  const poleMat = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3, 8), poleMat);
+  pole.position.set(w / 2 + 1.1, 1.5, d / 2 + 0.5);
+  group.add(pole);
+  const flag = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.6, 0.4),
+    new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+  );
+  flag.position.set(w / 2 + 1.4, 2.75, d / 2 + 0.5);
+  group.add(flag);
+  const flagDot = new THREE.Mesh(
+    new THREE.CircleGeometry(0.11, 16),
+    new THREE.MeshBasicMaterial({ color: 0xe63946, side: THREE.DoubleSide })
+  );
+  flagDot.position.set(w / 2 + 1.4, 2.75, d / 2 + 0.51);
+  group.add(flagDot);
+
+  const doorLocal = addDoorAndWindows(group, w / 2, h, doorHex, 1);
+
+  return { group, doorLocal, wallHex, label: "がっこう" };
+}
+
+const SCHOOL_PALETTES = [
+  { wall: "#fdf0d5", win: "#48cae4", door: "#e63946" },
+  { wall: "#eef2f5", win: "#f9c74f", door: "#43aa8b" },
+  { wall: "#fff3e0", win: "#9d4edd", door: "#48cae4" },
+];
+
 function createParkMesh(palette) {
   const p = palette || PARK_PALETTES[0];
   const group = new THREE.Group();
@@ -1132,6 +1195,7 @@ const STRUCTURE_FACTORIES = {
   building: createBuildingMesh,
   shop: createShopMesh,
   cinema: createCinemaMesh,
+  school: createSchoolMesh,
   park: createParkMesh,
   pond: createPondMesh,
 };
@@ -1140,6 +1204,7 @@ const STRUCTURE_PALETTES = {
   building: BUILDING_PALETTES,
   shop: SHOP_PALETTES,
   cinema: CINEMA_PALETTES,
+  school: SCHOOL_PALETTES,
   park: PARK_PALETTES,
   pond: POND_PALETTES,
 };
@@ -1148,10 +1213,19 @@ const STRUCTURE_RECIPES = {
   building: BUILDING_RECIPE,
   shop: SHOP_RECIPE,
   cinema: CINEMA_RECIPE,
+  school: SCHOOL_RECIPE,
   park: PARK_RECIPE,
   pond: POND_RECIPE,
 };
-const STRUCTURE_HAS_DOOR = { house: true, building: true, shop: true, cinema: true, park: false, pond: false };
+const STRUCTURE_HAS_DOOR = {
+  house: true,
+  building: true,
+  shop: true,
+  cinema: true,
+  school: true,
+  park: false,
+  pond: false,
+};
 
 const placedStructures = []; // {type, x, z, doorWorld, wallHex, paletteIndex}
 
@@ -1191,6 +1265,7 @@ const STRUCTURE_LABELS = {
   building: "🏢 ビル",
   shop: "🏪 おみせ",
   cinema: "🎬 えいがかん",
+  school: "🏫 がっこう",
   park: "🌳 こうえん",
   pond: "🎣 いけ",
 };
@@ -1199,6 +1274,7 @@ document.getElementById("build-house-btn").addEventListener("click", () => reque
 document.getElementById("build-building-btn").addEventListener("click", () => requestBuild("building"));
 document.getElementById("build-shop-btn").addEventListener("click", () => requestBuild("shop"));
 document.getElementById("build-cinema-btn").addEventListener("click", () => requestBuild("cinema"));
+document.getElementById("build-school-btn").addEventListener("click", () => requestBuild("school"));
 document.getElementById("build-park-btn").addEventListener("click", () => requestBuild("park"));
 document.getElementById("build-pond-btn").addEventListener("click", () => requestBuild("pond"));
 
@@ -1481,6 +1557,7 @@ const RECIPES = {
   house: HOUSE_RECIPE,
   building: BUILDING_RECIPE,
   shop: SHOP_RECIPE,
+  school: SCHOOL_RECIPE,
   car: CAR_RECIPE,
   train: TRAIN_RECIPE,
   bicycle: BICYCLE_RECIPE,
@@ -1491,6 +1568,7 @@ const OBJECT_RADIUS = {
   building: 2.4,
   shop: 2.4,
   cinema: 2.9,
+  school: 3.2,
   park: 2.8,
   pond: 2.8,
   car: 1.9,
@@ -1506,6 +1584,7 @@ const COLLISION_RADIUS = {
   building: 1.9,
   shop: 1.9,
   cinema: 2.1,
+  school: 2.4,
   park: 2.6,
   pond: 2.5,
   car: 1.3,
@@ -1535,6 +1614,7 @@ const GHOST_DISTANCE = {
   building: 5,
   shop: 4.5,
   cinema: 5.2,
+  school: 5.6,
   park: 5,
   pond: 5,
   car: 4,
@@ -2252,8 +2332,15 @@ const INTERIOR_NPC_COLORS = {
   building: { shirt: "#5b3a29", pants: "#2d2d2d" },
   house: { shirt: "#43aa8b", pants: "#5b3a29" },
   cinema: { shirt: "#2b2b2b", pants: "#9d4edd" },
+  school: { shirt: "#48cae4", pants: "#2d2d2d" },
 };
-const INTERIOR_NPC_LABEL = { shop: "てんいんさん", building: "けいびいん", house: "かぞく", cinema: "えいがかんの スタッフ" };
+const INTERIOR_NPC_LABEL = {
+  shop: "てんいんさん",
+  building: "けいびいん",
+  house: "かぞく",
+  cinema: "えいがかんの スタッフ",
+  school: "せんせい",
+};
 let interiorNpc = null;
 
 function setupInteriorNpc(type) {
@@ -2604,6 +2691,7 @@ const INTERIOR_TALK_LINES = {
   building: ["おつかれさま！", "けいびは まかせて！", "きょうも あんぜんに いこうね"],
   house: ["おかえりー！", "ごはん たべた?", "また あそびに きてね"],
   cinema: ["きょうは どの えいがを みる?", "ポップコーンも あるよ", "たのしんで いってね"],
+  school: ["きょうも べんきょう がんばろうね！", "きゅうしょくは なにが すき?", "うんどうかいの れんしゅう しようか"],
 };
 
 function pickLine(lines) {
