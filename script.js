@@ -18,6 +18,7 @@ const FOOD_TYPES = [
   { key: "carrot", name: "にんじん", emoji: "🥕" },
   { key: "onigiri", name: "おにぎり", emoji: "🍙" },
   { key: "fish", name: "さかな", emoji: "🐟" },
+  { key: "kakigori", name: "かき氷", emoji: "🍧" },
 ];
 
 const HOUSE_RECIPE = { red: 4, gray: 3, blue: 1 };
@@ -26,6 +27,7 @@ const SHOP_RECIPE = { yellow: 4, red: 3, blue: 2 };
 const CINEMA_RECIPE = { gray: 5, red: 4, yellow: 4, blue: 2 };
 const PARK_RECIPE = { green: 5, yellow: 3, blue: 2 };
 const SCHOOL_RECIPE = { gray: 6, red: 4, blue: 4, yellow: 3 };
+const YATAI_RECIPE = { red: 3, yellow: 2 };
 const POND_RECIPE = { blue: 4, gray: 2 };
 const CAR_RECIPE = { red: 5, gray: 4, blue: 3 };
 const TRAIN_RECIPE = { gray: 8, blue: 4, yellow: 3, red: 2 };
@@ -55,11 +57,13 @@ let currentSlot = Number(localStorage.getItem(LAST_SLOT_KEY)) || 1;
 
 let state = {
   inventory: { red: 0, gray: 0, blue: 0, yellow: 0, green: 0, purple: 0 },
-  food: { apple: 0, bread: 0, carrot: 0, onigiri: 0, fish: 0 },
+  food: { apple: 0, bread: 0, carrot: 0, onigiri: 0, fish: 0, kakigori: 0 },
   totalCollected: 0,
   structures: [], // {type:'house'|'building'|'shop', x, z, paletteIndex}
   cars: [], // {x, z, colorIndex}
   toyBlocks: [], // {x, y, z, colorKey}
+  achievements: {}, // {id: true}
+  lastRankName: null,
   soundOn: true,
 };
 
@@ -95,6 +99,8 @@ function saveState() {
       structures: state.structures,
       cars: state.cars,
       toyBlocks: state.toyBlocks,
+      achievements: state.achievements,
+      lastRankName: state.lastRankName,
       soundOn: state.soundOn,
     };
     localStorage.setItem(saveKeyFor(currentSlot), JSON.stringify(toSave));
@@ -116,9 +122,81 @@ function loadState() {
     COLORS.forEach((c) => {
       if (typeof state.inventory[c.key] !== "number") state.inventory[c.key] = 0;
     });
+    if (!state.achievements || typeof state.achievements !== "object") state.achievements = {};
   } catch (e) {
     console.warn("よみこみに しっぱいしました", e);
   }
+}
+
+// ---------- じっせき（アチーブメント） ----------
+const ACHIEVEMENTS = [
+  { id: "first_building", label: "はじめての たてもの", emoji: "🏠" },
+  { id: "five_buildings", label: "まちづくりマスター", emoji: "🏙️" },
+  { id: "collector_50", label: "ブロックコレクター", emoji: "🧱" },
+  { id: "rider", label: "うしのりめいじん", emoji: "🐄" },
+  { id: "fisher", label: "つりめいじん", emoji: "🎣" },
+  { id: "talker", label: "おしゃべりずき", emoji: "💬" },
+  { id: "quest_complete", label: "おてつだいずき", emoji: "🎁" },
+  { id: "shop_trade", label: "おかいものじょうず", emoji: "🛒" },
+  { id: "photographer", label: "カメラマン", emoji: "📸" },
+  { id: "school_built", label: "がっこう かんせい", emoji: "🏫" },
+  { id: "matsuri_food", label: "おまつりずき", emoji: "🏮" },
+  { id: "night_watcher", label: "よふかしさん", emoji: "🌙" },
+];
+
+function unlockAchievement(id) {
+  if (state.achievements[id]) return;
+  state.achievements[id] = true;
+  const a = ACHIEVEMENTS.find((x) => x.id === id);
+  if (a) {
+    showMessage(`🏆 じっせき かいじょ：${a.emoji} ${a.label}`);
+    playTone(880, 0.1);
+    playTone(1100, 0.12);
+    playTone(1400, 0.16);
+  }
+  renderAchievements();
+  saveState();
+}
+
+function renderAchievements() {
+  const el = document.getElementById("achievements-panel");
+  if (!el) return;
+  const doneCount = ACHIEVEMENTS.filter((a) => state.achievements[a.id]).length;
+  el.innerHTML =
+    `<div class="achievements-title">🏆 じっせき（${doneCount}/${ACHIEVEMENTS.length}）</div>` +
+    ACHIEVEMENTS.map((a) => {
+      const done = !!state.achievements[a.id];
+      return `<div class="achievement-badge ${done ? "done" : ""}">${done ? a.emoji : "❔"} ${a.label}</div>`;
+    }).join("");
+}
+
+// ---------- まちの ランク ----------
+const RANK_THRESHOLDS = [
+  { name: "むら", min: 0 },
+  { name: "まち", min: 5 },
+  { name: "とかい", min: 12 },
+  { name: "だいとかい", min: 25 },
+];
+
+function currentRank() {
+  const count = state.structures.length + state.cars.length;
+  let rank = RANK_THRESHOLDS[0];
+  for (const r of RANK_THRESHOLDS) {
+    if (count >= r.min) rank = r;
+  }
+  return rank;
+}
+
+function updateTownRank() {
+  const el = document.getElementById("rank-badge");
+  const rank = currentRank();
+  if (el) el.textContent = `🏅 ${rank.name}`;
+  if (state.lastRankName && state.lastRankName !== rank.name) {
+    showMessage(`🏅 まちが「${rank.name}」に なったよ！`);
+    playTone(700, 0.1);
+    playTone(1000, 0.15);
+  }
+  state.lastRankName = rank.name;
 }
 
 // ---------- おと ----------
@@ -173,6 +251,8 @@ const doneToyBtn = document.getElementById("done-toy-btn");
 const toyPaletteEl = document.getElementById("toy-palette");
 const buildMenuToggle = document.getElementById("build-menu-toggle");
 const buildMenuPanel = document.getElementById("build-menu");
+const achievementsToggle = document.getElementById("achievements-toggle");
+const achievementsPanel = document.getElementById("achievements-panel");
 const buildButtons = [
   document.getElementById("build-house-btn"),
   document.getElementById("build-building-btn"),
@@ -181,6 +261,7 @@ const buildButtons = [
   document.getElementById("build-school-btn"),
   document.getElementById("build-park-btn"),
   document.getElementById("build-pond-btn"),
+  document.getElementById("build-yatai-btn"),
   document.getElementById("build-car-btn"),
   document.getElementById("build-train-btn"),
   document.getElementById("build-bicycle-btn"),
@@ -189,6 +270,7 @@ const buildButtons = [
 ];
 
 buildMenuToggle.addEventListener("click", () => buildMenuPanel.classList.toggle("hidden"));
+achievementsToggle.addEventListener("click", () => achievementsPanel.classList.toggle("hidden"));
 
 let mode = "town"; // 'town' | 'inside'
 
@@ -201,6 +283,8 @@ function updateHud() {
   soundBtn.classList.toggle("hidden", placing);
   cameraViewBtn.classList.toggle("hidden", placing);
   photoBtn.classList.toggle("hidden", placing);
+  achievementsToggle.classList.toggle("hidden", placing);
+  if (placing) achievementsPanel.classList.add("hidden");
   exitHouseBtn.classList.toggle("hidden", mode !== "inside");
   shopTradeBtn.classList.toggle("hidden", !(mode === "inside" && currentBuilding && currentBuilding.type === "shop"));
   exitCarBtn.classList.toggle("hidden", mode !== "town" || !driving || placing);
@@ -418,6 +502,77 @@ function updateWeather(delta, centerX, centerZ) {
   }
   rainPoints.position.set(centerX, 0, centerZ);
   snowPoints.position.set(centerX, 0, centerZ);
+}
+
+// ---------- なつまつりの はなび ----------
+const FIREWORK_COLORS = [0xff6b6b, 0xffd23b, 0x48cae4, 0x9d4edd, 0x43aa8b, 0xffffff];
+const fireworks = [];
+
+function spawnFirework(x, z) {
+  const count = 60;
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const velocities = [];
+  const y = 18 + Math.random() * 8;
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(Math.random() * 2 - 1);
+    const speed = 4 + Math.random() * 3;
+    velocities.push({
+      x: Math.sin(phi) * Math.cos(theta) * speed,
+      y: Math.sin(phi) * Math.sin(theta) * speed,
+      z: Math.cos(phi) * speed,
+    });
+  }
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const color = FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)];
+  const material = new THREE.PointsMaterial({ color, size: 0.35, transparent: true, opacity: 1 });
+  const points = new THREE.Points(geometry, material);
+  scene.add(points);
+  fireworks.push({ points, velocities, age: 0, maxAge: 1.6, baseX: x, baseY: y, baseZ: z });
+  playTone(180 + Math.random() * 60, 0.1);
+  playTone(600 + Math.random() * 200, 0.3);
+}
+
+function updateFireworks(delta) {
+  for (let i = fireworks.length - 1; i >= 0; i--) {
+    const fw = fireworks[i];
+    fw.age += delta;
+    const t = fw.age;
+    const pos = fw.points.geometry.attributes.position;
+    for (let j = 0; j < fw.velocities.length; j++) {
+      const v = fw.velocities[j];
+      pos.setX(j, fw.baseX + v.x * t);
+      pos.setY(j, fw.baseY + v.y * t - 2 * t * t);
+      pos.setZ(j, fw.baseZ + v.z * t);
+    }
+    pos.needsUpdate = true;
+    fw.points.material.opacity = Math.max(0, 1 - t / fw.maxAge);
+    if (fw.age >= fw.maxAge) {
+      scene.remove(fw.points);
+      fw.points.geometry.dispose();
+      fw.points.material.dispose();
+      fireworks.splice(i, 1);
+    }
+  }
+}
+
+let fireworkTimer = 4;
+function maybeSpawnFirework(delta, brightness, centerX, centerZ) {
+  if (brightness > 0.32) {
+    fireworkTimer = 3 + Math.random() * 3;
+    return;
+  }
+  fireworkTimer -= delta;
+  if (fireworkTimer <= 0) {
+    fireworkTimer = 4 + Math.random() * 5;
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 15 + Math.random() * 20;
+    spawnFirework(centerX + Math.cos(angle) * dist, centerZ + Math.sin(angle) * dist);
+  }
 }
 
 // ==========================================================
@@ -1190,6 +1345,49 @@ const POND_PALETTES = [
   { bank: "#7a6548", water: "#2b9eb3", dock: "#5b3a29" },
 ];
 
+function createYataiMesh(palette) {
+  const p = palette || YATAI_PALETTES[0];
+  const group = new THREE.Group();
+
+  const woodMat = new THREE.MeshLambertMaterial({ color: 0x8a5a2b });
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.9, 0.7), new THREE.MeshLambertMaterial({ color: 0xceab7d }));
+  counter.position.set(0, 0.45, 0.7);
+  group.add(counter);
+
+  [-1, 1].forEach((sideX) => {
+    [-0.6, 0.9].forEach((posZ) => {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 8), woodMat);
+      pole.position.set(sideX * 1.05, 1.1, posZ);
+      group.add(pole);
+    });
+  });
+
+  const clothMat = new THREE.MeshLambertMaterial({ color: col(p.cloth) });
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.12, 2.2), clothMat);
+  roof.position.set(0, 2.2, 0.15);
+  group.add(roof);
+
+  const signTex = makeSignTexture(p.food, "#ffffff", p.cloth);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.5), new THREE.MeshLambertMaterial({ map: signTex }));
+  sign.position.set(0, 1.7, 1.06);
+  group.add(sign);
+
+  const lanternMat = new THREE.MeshLambertMaterial({ color: 0xe63946 });
+  [-1.4, 1.4].forEach((lx) => {
+    const lantern = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.32, 10), lanternMat);
+    lantern.position.set(lx, 1.9, 0.9);
+    group.add(lantern);
+  });
+
+  return { group, doorLocal: new THREE.Vector3(0, 0, 0), wallHex: p.cloth, label: "やたい" };
+}
+
+const YATAI_PALETTES = [
+  { cloth: "#e63946", food: "やきそば" },
+  { cloth: "#f9c74f", food: "たこやき" },
+  { cloth: "#48cae4", food: "かき氷" },
+];
+
 const STRUCTURE_FACTORIES = {
   house: createHouseMesh,
   building: createBuildingMesh,
@@ -1198,6 +1396,7 @@ const STRUCTURE_FACTORIES = {
   school: createSchoolMesh,
   park: createParkMesh,
   pond: createPondMesh,
+  yatai: createYataiMesh,
 };
 const STRUCTURE_PALETTES = {
   house: HOUSE_PALETTES,
@@ -1207,6 +1406,7 @@ const STRUCTURE_PALETTES = {
   school: SCHOOL_PALETTES,
   park: PARK_PALETTES,
   pond: POND_PALETTES,
+  yatai: YATAI_PALETTES,
 };
 const STRUCTURE_RECIPES = {
   house: HOUSE_RECIPE,
@@ -1216,6 +1416,7 @@ const STRUCTURE_RECIPES = {
   school: SCHOOL_RECIPE,
   park: PARK_RECIPE,
   pond: POND_RECIPE,
+  yatai: YATAI_RECIPE,
 };
 const STRUCTURE_HAS_DOOR = {
   house: true,
@@ -1225,6 +1426,7 @@ const STRUCTURE_HAS_DOOR = {
   school: true,
   park: false,
   pond: false,
+  yatai: false,
 };
 
 const placedStructures = []; // {type, x, z, doorWorld, wallHex, paletteIndex}
@@ -1268,6 +1470,7 @@ const STRUCTURE_LABELS = {
   school: "🏫 がっこう",
   park: "🌳 こうえん",
   pond: "🎣 いけ",
+  yatai: "🏮 やたい",
 };
 
 document.getElementById("build-house-btn").addEventListener("click", () => requestBuild("house"));
@@ -1277,6 +1480,7 @@ document.getElementById("build-cinema-btn").addEventListener("click", () => requ
 document.getElementById("build-school-btn").addEventListener("click", () => requestBuild("school"));
 document.getElementById("build-park-btn").addEventListener("click", () => requestBuild("park"));
 document.getElementById("build-pond-btn").addEventListener("click", () => requestBuild("pond"));
+document.getElementById("build-yatai-btn").addEventListener("click", () => requestBuild("yatai"));
 
 // ==========================================================
 // くるま
@@ -1562,6 +1766,7 @@ const RECIPES = {
   train: TRAIN_RECIPE,
   bicycle: BICYCLE_RECIPE,
   pond: POND_RECIPE,
+  yatai: YATAI_RECIPE,
 };
 const OBJECT_RADIUS = {
   house: 2.1,
@@ -1571,6 +1776,7 @@ const OBJECT_RADIUS = {
   school: 3.2,
   park: 2.8,
   pond: 2.8,
+  yatai: 2.2,
   car: 1.9,
   train: 2.6,
   bicycle: 1.0,
@@ -1587,6 +1793,7 @@ const COLLISION_RADIUS = {
   school: 2.4,
   park: 2.6,
   pond: 2.5,
+  yatai: 1.7,
   car: 1.3,
   train: 1.8,
   bicycle: 0.7,
@@ -1617,6 +1824,7 @@ const GHOST_DISTANCE = {
   school: 5.6,
   park: 5,
   pond: 5,
+  yatai: 4.5,
   car: 4,
   train: 5,
   bicycle: 3,
@@ -1836,9 +2044,15 @@ function confirmPlacement() {
       interiorTheme: placementGhostInteriorTheme,
     });
     showMessage(wasMoving ? `${STRUCTURE_LABELS[kind]} を うごかしたよ` : `${STRUCTURE_LABELS[kind]} が まちに たった！ドアから 入れるよ`);
+    if (!wasMoving) {
+      if (kind === "school") unlockAchievement("school_built");
+      if (state.structures.length >= 1) unlockAchievement("first_building");
+      if (state.structures.length >= 5) unlockAchievement("five_buildings");
+    }
   }
   playTone(wasMoving ? 650 : 900, wasMoving ? 0.15 : 0.2);
   renderInventory();
+  updateTownRank();
   saveState();
   isMovingExisting = false;
   movingOriginal = null;
@@ -1996,6 +2210,7 @@ function performRide() {
   }
   boardCar({ x: nearest.x, z: nearest.z, facing: nearest.facing, mesh: nearest.rig.group, type: "animal", npcRef: nearest, speed: nearest.speed * 2.4 });
   showMessage("🐄 うしに のったよ！");
+  unlockAchievement("rider");
 }
 
 // ---------- いけで さかなを つる ----------
@@ -2016,9 +2231,46 @@ function performFish() {
     state.food.fish++;
     playTone(900, 0.15);
     showMessage("🎣 さかなが つれたよ！");
+    unlockAchievement("fisher");
   } else {
     showMessage("🎣 ざんねん、にげられちゃった…");
   }
+  renderFoodInventory();
+  saveState();
+}
+
+// ---------- やたいで おまつりの たべものを もらう ----------
+const YATAI_RADIUS = 3.5;
+const YATAI_TRADE_COST = 3;
+
+function performYatai() {
+  if (mode !== "town" || drivingCar || placementKind) return;
+  const yatai = placedStructures.find(
+    (s) => s.type === "yatai" && Math.hypot(s.x - player.x, s.z - player.z) < YATAI_RADIUS
+  );
+  if (!yatai) {
+    showMessage("ちかくに やたいが ないよ（やたいを つくって みよう）");
+    return;
+  }
+  let bestKey = null;
+  let bestCount = 0;
+  COLORS.forEach((c) => {
+    if (state.inventory[c.key] > bestCount) {
+      bestCount = state.inventory[c.key];
+      bestKey = c.key;
+    }
+  });
+  if (!bestKey || bestCount < YATAI_TRADE_COST) {
+    showMessage(`ブロックが ${YATAI_TRADE_COST}こ たりないよ（いろは なんでも いいよ）`);
+    return;
+  }
+  state.inventory[bestKey] -= YATAI_TRADE_COST;
+  state.food.kakigori++;
+  playTone(600, 0.1);
+  playTone(850, 0.12);
+  showMessage(`🏮 やたいで 🍧かき氷を もらったよ！`);
+  unlockAchievement("matsuri_food");
+  renderInventory();
   renderFoodInventory();
   saveState();
 }
@@ -2102,6 +2354,7 @@ function checkBlockCollisions(pos) {
       fieldBlocks.splice(i, 1);
       playTone(700, 0.12);
       renderInventory();
+      if (state.totalCollected >= 50) unlockAchievement("collector_50");
       saveState();
     }
   }
@@ -2715,6 +2968,7 @@ function performTalk() {
     const label = INTERIOR_NPC_LABEL[npcType] || "だれか";
     const lines = INTERIOR_TALK_LINES[npcType] || TALK_LINES;
     showMessage(`${label}「${pickLine(lines)}」`);
+    unlockAchievement("talker");
     return;
   }
   let nearest = null;
@@ -2735,6 +2989,7 @@ function performTalk() {
   nearest.happyTimer = 0.6;
   playTone(700, 0.1);
   playTone(880, 0.12);
+  unlockAchievement("talker");
   if (nearest.quest) {
     const q = nearest.quest;
     const colorName = COLORS.find((c) => c.key === q.colorKey).name;
@@ -2748,6 +3003,7 @@ function performTalk() {
       playTone(1000, 0.12);
       playTone(1300, 0.14);
       showMessage(`「${colorName}ブロック ありがとう！」 おれいに ${food.emoji}×${QUEST_REWARD_FOOD_COUNT} を もらったよ！`);
+      unlockAchievement("quest_complete");
       renderInventory();
       renderFoodInventory();
       saveState();
@@ -2783,6 +3039,7 @@ function performShopTrade() {
   playTone(720, 0.1);
   playTone(980, 0.12);
   showMessage(`${colorName}ブロックを ${SHOP_TRADE_COST}こ わたして、${food.emoji} を もらったよ！`);
+  unlockAchievement("shop_trade");
   renderInventory();
   renderFoodInventory();
   saveState();
@@ -2824,6 +3081,7 @@ function takePhoto() {
   playTone(880, 0.08);
   playTone(1200, 0.1);
   showMessage("📸 しゃしんを ほぞんしたよ！");
+  unlockAchievement("photographer");
 }
 photoBtn.addEventListener("click", takePhoto);
 
@@ -2867,6 +3125,12 @@ function performAction() {
   const pond = placedStructures.find((s) => s.type === "pond");
   if (pond && Math.hypot(pond.x - player.x, pond.z - player.z) <= FISH_RADIUS) {
     performFish();
+    return;
+  }
+
+  const yatai = placedStructures.find((s) => s.type === "yatai");
+  if (yatai && Math.hypot(yatai.x - player.x, yatai.z - player.z) <= YATAI_RADIUS) {
+    performYatai();
     return;
   }
 
@@ -3097,9 +3361,12 @@ function animate() {
     applySignalState(nsRedMat, nsYellowMat, nsGreenMat, lights.ns);
     applySignalState(ewRedMat, ewYellowMat, ewGreenMat, lights.ew);
     updateTraffic(delta, lights);
-    updateDayNight(time);
+    const brightness = updateDayNight(time);
     const activePos = drivingCar || player;
     updateWeather(delta, activePos.x, activePos.z);
+    maybeSpawnFirework(delta, brightness, activePos.x, activePos.z);
+    updateFireworks(delta);
+    if (brightness < 0.3) unlockAchievement("night_watcher");
 
     trees.forEach((t) => {
       if (t.shakeTimer > 0) {
@@ -3182,6 +3449,8 @@ document.getElementById("start-btn").addEventListener("click", () => {
   soundBtn.textContent = state.soundOn ? "🔊" : "🔇";
   renderInventory();
   renderFoodInventory();
+  renderAchievements();
+  updateTownRank();
   titleScreen.classList.add("hidden");
   gameScreen.classList.remove("hidden");
   resizeRenderer();

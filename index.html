@@ -28,7 +28,7 @@
         <li>シフトキー（or「はしる」ボタン）を おしながらで はやく はしれるよ</li>
         <li>スペースキー・エンターキー（or したの「✨アクション」ボタン）で、ちかくに いる ものに あわせて はなす・のる・つる・えさをあげる・うごかす・こうげきを ぜんぶ 1つの ボタンで できるよ</li>
         <li>まちの ブロックに ふれると あつまるよ</li>
-        <li>「🏗️たてる」ボタンを おすと、「いえ」「ビル」「おみせ」「えいがかん」「がっこう」「こうえん」「いけ」「くるま」「でんしゃ」「じてんしゃ」「おもちゃ」「うごかす」の メニューが ひらくよ</li>
+        <li>「🏗️たてる」ボタンを おすと、「いえ」「ビル」「おみせ」「えいがかん」「がっこう」「こうえん」「いけ」「やたい」「くるま」「でんしゃ」「じてんしゃ」「おもちゃ」「うごかす」の メニューが ひらくよ</li>
         <li>たてる ものを えらんで ばしょを きめて「ここに たてる」を おそう（こうえん・いけは 入り口が ないよ）</li>
         <li>たてもののドアに ちかづくと、なかに 入れるよ（お店には 店員さんも いるよ）</li>
         <li>入り口の ほうに あるくと、そとに でられるよ（ボタンでも でられるよ）</li>
@@ -37,6 +37,9 @@
         <li>ひとに ちかづいて「アクション」を おすと、おしゃべりできるよ（ブロックを おねがい されることも あるよ）</li>
         <li>うしに ちかづいて「アクション」を おすと、うしに のって うごけるよ</li>
         <li>いけの ちかくで「アクション」を おすと、さかなが つれることが あるよ</li>
+        <li>やたいの ちかくで「アクション」を おすと、ブロックと ひきかえに かき氷が もらえるよ</li>
+        <li>よるに なると、まちで はなびが あがることが あるよ</li>
+        <li>「🏆じっせき」ボタンで、いままでの がんばりを チェックできるよ。たてものや くるまを たくさん つくると まちの ランクも あがるよ</li>
         <li>「してん」ボタンで カメラを きりかえられるよ。「しゃしん」ボタンで きねんさつえいも できるよ</li>
         <li>タイトルがめんで「まち1」「まち2」「まち3」から あそぶ まちを えらべるよ</li>
       </ol>
@@ -48,10 +51,12 @@
     <div class="topbar">
       <div id="inventory" class="inventory"></div>
       <div id="food-inventory" class="inventory"></div>
+      <span id="rank-badge" class="inv-badge">🏅 むら</span>
       <div class="topbar-buttons">
         <button id="sound-btn" class="mini-btn">🔊</button>
         <button id="camera-view-btn" class="mini-btn">📷 してん</button>
         <button id="photo-btn" class="mini-btn">📸 しゃしん</button>
+        <button id="achievements-toggle" class="mini-btn">🏆 じっせき</button>
         <button id="build-menu-toggle" class="mini-btn">🏗️ たてる ▾</button>
         <button id="shop-trade-btn" class="mini-btn hidden">🛒 こうかんする</button>
         <button id="exit-house-btn" class="mini-btn hidden">◀ そとに でる</button>
@@ -61,6 +66,7 @@
         <button id="cancel-place-btn" class="mini-btn danger hidden">✖ やめる</button>
       </div>
     </div>
+    <div id="achievements-panel" class="inventory hidden"></div>
     <div id="build-menu" class="inventory hidden">
       <button id="build-house-btn" class="mini-btn build-trigger">🏠 いえ</button>
       <button id="build-building-btn" class="mini-btn build-trigger">🏢 ビル</button>
@@ -69,6 +75,7 @@
       <button id="build-school-btn" class="mini-btn build-trigger">🏫 がっこう</button>
       <button id="build-park-btn" class="mini-btn build-trigger">🌳 こうえん</button>
       <button id="build-pond-btn" class="mini-btn build-trigger">🎣 いけ</button>
+      <button id="build-yatai-btn" class="mini-btn build-trigger">🏮 やたい</button>
       <button id="build-car-btn" class="mini-btn build-trigger">🚗 くるま</button>
       <button id="build-train-btn" class="mini-btn build-trigger">🚂 でんしゃ</button>
       <button id="build-bicycle-btn" class="mini-btn build-trigger">🚲 じてんしゃ</button>
