@@ -17,6 +17,7 @@ const FOOD_TYPES = [
   { key: "bread", name: "パン", emoji: "🍞" },
   { key: "carrot", name: "にんじん", emoji: "🥕" },
   { key: "onigiri", name: "おにぎり", emoji: "🍙" },
+  { key: "fish", name: "さかな", emoji: "🐟" },
 ];
 
 const HOUSE_RECIPE = { red: 4, gray: 3, blue: 1 };
@@ -24,6 +25,7 @@ const BUILDING_RECIPE = { gray: 6, blue: 5, yellow: 2 };
 const SHOP_RECIPE = { yellow: 4, red: 3, blue: 2 };
 const CINEMA_RECIPE = { gray: 5, red: 4, yellow: 4, blue: 2 };
 const PARK_RECIPE = { green: 5, yellow: 3, blue: 2 };
+const POND_RECIPE = { blue: 4, gray: 2 };
 const CAR_RECIPE = { red: 5, gray: 4, blue: 3 };
 const TRAIN_RECIPE = { gray: 8, blue: 4, yellow: 3, red: 2 };
 const BICYCLE_RECIPE = { gray: 3, red: 2, blue: 1 };
@@ -33,7 +35,7 @@ const SAVE_KEY = "legoTown3dSave_v1";
 
 let state = {
   inventory: { red: 0, gray: 0, blue: 0, yellow: 0, green: 0, purple: 0 },
-  food: { apple: 0, bread: 0, carrot: 0, onigiri: 0 },
+  food: { apple: 0, bread: 0, carrot: 0, onigiri: 0, fish: 0 },
   totalCollected: 0,
   structures: [], // {type:'house'|'building'|'shop', x, z, paletteIndex}
   cars: [], // {x, z, colorIndex}
@@ -88,6 +90,12 @@ function loadState() {
       const loaded = JSON.parse(raw);
       state = Object.assign(state, loaded);
     }
+    FOOD_TYPES.forEach((f) => {
+      if (typeof state.food[f.key] !== "number") state.food[f.key] = 0;
+    });
+    COLORS.forEach((c) => {
+      if (typeof state.inventory[c.key] !== "number") state.inventory[c.key] = 0;
+    });
   } catch (e) {
     console.warn("よみこみに しっぱいしました", e);
   }
@@ -137,6 +145,7 @@ const soundBtn = document.getElementById("sound-btn");
 const attackBtn = document.getElementById("attack-btn");
 const feedBtn = document.getElementById("feed-btn");
 const talkBtn = document.getElementById("talk-btn");
+const fishBtn = document.getElementById("fish-btn");
 const cameraViewBtn = document.getElementById("camera-view-btn");
 const photoBtn = document.getElementById("photo-btn");
 const exitHouseBtn = document.getElementById("exit-house-btn");
@@ -152,6 +161,7 @@ const buildButtons = [
   document.getElementById("build-shop-btn"),
   document.getElementById("build-cinema-btn"),
   document.getElementById("build-park-btn"),
+  document.getElementById("build-pond-btn"),
   document.getElementById("build-car-btn"),
   document.getElementById("build-train-btn"),
   document.getElementById("build-bicycle-btn"),
@@ -169,6 +179,7 @@ function updateHud() {
   feedBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
   talkBtn.classList.toggle("hidden", driving || placing);
   rideBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
+  fishBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
   soundBtn.classList.toggle("hidden", placing);
   cameraViewBtn.classList.toggle("hidden", placing);
   photoBtn.classList.toggle("hidden", placing);
@@ -981,12 +992,57 @@ const PARK_PALETTES = [
   { bench: "#a0662f", swing: "#48cae4" },
 ];
 
+function createPondMesh(palette) {
+  const p = palette || POND_PALETTES[0];
+  const group = new THREE.Group();
+
+  const bank = new THREE.Mesh(
+    new THREE.CylinderGeometry(2.4, 2.6, 0.12, 24),
+    new THREE.MeshLambertMaterial({ color: col(p.bank) })
+  );
+  bank.position.y = 0.06;
+  group.add(bank);
+
+  const water = new THREE.Mesh(
+    new THREE.CylinderGeometry(2.0, 2.0, 0.08, 24),
+    new THREE.MeshLambertMaterial({ color: col(p.water) })
+  );
+  water.position.y = 0.14;
+  group.add(water);
+
+  const padMat = new THREE.MeshLambertMaterial({ color: col("#4caf50") });
+  for (let i = 0; i < 4; i++) {
+    const angle = (i / 4) * Math.PI * 2 + 0.4;
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.03, 10), padMat);
+    pad.position.set(Math.cos(angle) * 1.1, 0.19, Math.sin(angle) * 1.1);
+    group.add(pad);
+  }
+
+  const dockMat = new THREE.MeshLambertMaterial({ color: col(p.dock) });
+  const dock = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 1.6), dockMat);
+  dock.position.set(0, 0.18, 2.4);
+  group.add(dock);
+  [-0.25, 0.25].forEach((lx) => {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.08), dockMat);
+    leg.position.set(lx, 0.08, 2.9);
+    group.add(leg);
+  });
+
+  return { group, doorLocal: new THREE.Vector3(0, 0, 0), wallHex: p.bank, label: "いけ" };
+}
+
+const POND_PALETTES = [
+  { bank: "#8a7355", water: "#48cae4", dock: "#8a5a2b" },
+  { bank: "#7a6548", water: "#2b9eb3", dock: "#5b3a29" },
+];
+
 const STRUCTURE_FACTORIES = {
   house: createHouseMesh,
   building: createBuildingMesh,
   shop: createShopMesh,
   cinema: createCinemaMesh,
   park: createParkMesh,
+  pond: createPondMesh,
 };
 const STRUCTURE_PALETTES = {
   house: HOUSE_PALETTES,
@@ -994,6 +1050,7 @@ const STRUCTURE_PALETTES = {
   shop: SHOP_PALETTES,
   cinema: CINEMA_PALETTES,
   park: PARK_PALETTES,
+  pond: POND_PALETTES,
 };
 const STRUCTURE_RECIPES = {
   house: HOUSE_RECIPE,
@@ -1001,8 +1058,9 @@ const STRUCTURE_RECIPES = {
   shop: SHOP_RECIPE,
   cinema: CINEMA_RECIPE,
   park: PARK_RECIPE,
+  pond: POND_RECIPE,
 };
-const STRUCTURE_HAS_DOOR = { house: true, building: true, shop: true, cinema: true, park: false };
+const STRUCTURE_HAS_DOOR = { house: true, building: true, shop: true, cinema: true, park: false, pond: false };
 
 const placedStructures = []; // {type, x, z, doorWorld, wallHex, paletteIndex}
 
@@ -1043,6 +1101,7 @@ const STRUCTURE_LABELS = {
   shop: "🏪 おみせ",
   cinema: "🎬 えいがかん",
   park: "🌳 こうえん",
+  pond: "🎣 いけ",
 };
 
 document.getElementById("build-house-btn").addEventListener("click", () => requestBuild("house"));
@@ -1050,6 +1109,7 @@ document.getElementById("build-building-btn").addEventListener("click", () => re
 document.getElementById("build-shop-btn").addEventListener("click", () => requestBuild("shop"));
 document.getElementById("build-cinema-btn").addEventListener("click", () => requestBuild("cinema"));
 document.getElementById("build-park-btn").addEventListener("click", () => requestBuild("park"));
+document.getElementById("build-pond-btn").addEventListener("click", () => requestBuild("pond"));
 
 // ==========================================================
 // くるま
@@ -1317,6 +1377,7 @@ const RECIPES = {
   car: CAR_RECIPE,
   train: TRAIN_RECIPE,
   bicycle: BICYCLE_RECIPE,
+  pond: POND_RECIPE,
 };
 const OBJECT_RADIUS = {
   house: 2.1,
@@ -1324,6 +1385,7 @@ const OBJECT_RADIUS = {
   shop: 2.4,
   cinema: 2.9,
   park: 2.8,
+  pond: 2.8,
   car: 1.9,
   train: 2.6,
   bicycle: 1.0,
@@ -1334,6 +1396,7 @@ const GHOST_DISTANCE = {
   shop: 4.5,
   cinema: 5.2,
   park: 5,
+  pond: 5,
   car: 4,
   train: 5,
   bicycle: 3,
@@ -1716,6 +1779,32 @@ function performRide() {
   showMessage("🐄 うしに のったよ！");
 }
 rideBtn.addEventListener("click", performRide);
+
+// ---------- いけで さかなを つる ----------
+const FISH_RADIUS = 4;
+
+function performFish() {
+  if (mode !== "town" || drivingCar || placementKind) return;
+  const pond = placedStructures.find(
+    (s) => s.type === "pond" && Math.hypot(s.x - player.x, s.z - player.z) < FISH_RADIUS
+  );
+  if (!pond) {
+    showMessage("ちかくに いけが ないよ（いけを つくって みよう）");
+    return;
+  }
+  playTone(500, 0.08);
+  playTone(650, 0.1);
+  if (Math.random() < 0.7) {
+    state.food.fish++;
+    playTone(900, 0.15);
+    showMessage("🎣 さかなが つれたよ！");
+  } else {
+    showMessage("🎣 ざんねん、にげられちゃった…");
+  }
+  renderFoodInventory();
+  saveState();
+}
+fishBtn.addEventListener("click", performFish);
 
 // ==========================================================
 // たてもの／くるまの じょうたい を さいこうちく（よみこみ時）
