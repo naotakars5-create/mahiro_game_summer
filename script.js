@@ -2211,6 +2211,8 @@ function spawnNpc(rig, options) {
     flyHeight: options.flyHeight || 0,
     hopTimer: 0,
     happyTimer: 0,
+    quest: null,
+    questBadge: null,
   };
   npc.rig.group.position.set(npc.x, npc.isFlyer ? npc.flyHeight : 0, npc.z);
   npcs.push(npc);
@@ -2232,7 +2234,35 @@ for (let i = 0; i < 2; i++) spawnNpc(createCat(), { speed: 1.9, isAnimal: true, 
 for (let i = 0; i < 2; i++)
   spawnNpc(createBird(), { speed: 2.6, isFlyer: true, flyHeight: 2.2 + Math.random(), isAnimal: true, kind: "bird" });
 
+// ---------- ひとからの おねがい（クエスト） ----------
+const QUEST_REWARD_FOOD_COUNT = 2;
+
+function assignRandomQuest() {
+  const candidates = npcs.filter((n) => !n.isAnimal && !n.quest);
+  if (!candidates.length) return;
+  const npc = candidates[Math.floor(Math.random() * candidates.length)];
+  const palette = unlockedColors();
+  const color = palette[Math.floor(Math.random() * palette.length)];
+  const amount = 3 + Math.floor(Math.random() * 4);
+  npc.quest = { colorKey: color.key, amount };
+  const badge = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, 0.3, 0.3),
+    new THREE.MeshLambertMaterial({ color: col(color.hex) })
+  );
+  badge.position.y = 2.3;
+  npc.rig.group.add(badge);
+  npc.questBadge = badge;
+}
+assignRandomQuest();
+setInterval(() => {
+  if (mode === "town" && !npcs.some((n) => n.quest)) assignRandomQuest();
+}, 5000);
+
 function updateNpc(npc, delta, time) {
+  if (npc.questBadge) {
+    npc.questBadge.position.y = 2.3 + Math.sin(time * 3) * 0.1;
+    npc.questBadge.rotation.y += delta * 2;
+  }
   if (npc.happyTimer > 0) {
     npc.happyTimer -= delta;
     npc.phase += delta * 16;
@@ -2393,6 +2423,27 @@ function performTalk() {
   nearest.happyTimer = 0.6;
   playTone(700, 0.1);
   playTone(880, 0.12);
+  if (nearest.quest) {
+    const q = nearest.quest;
+    const colorName = COLORS.find((c) => c.key === q.colorKey).name;
+    if (state.inventory[q.colorKey] >= q.amount) {
+      state.inventory[q.colorKey] -= q.amount;
+      const food = FOOD_TYPES[Math.floor(Math.random() * FOOD_TYPES.length)];
+      state.food[food.key] += QUEST_REWARD_FOOD_COUNT;
+      if (nearest.questBadge) nearest.rig.group.remove(nearest.questBadge);
+      nearest.questBadge = null;
+      nearest.quest = null;
+      playTone(1000, 0.12);
+      playTone(1300, 0.14);
+      showMessage(`「${colorName}ブロック ありがとう！」 おれいに ${food.emoji}×${QUEST_REWARD_FOOD_COUNT} を もらったよ！`);
+      renderInventory();
+      renderFoodInventory();
+      saveState();
+    } else {
+      showMessage(`「${colorName}ブロックを ${q.amount}こ もってきてほしいな（いま ${state.inventory[q.colorKey]}こ）」`);
+    }
+    return;
+  }
   showMessage(`「${pickLine(TALK_LINES)}」`);
 }
 talkBtn.addEventListener("click", performTalk);
