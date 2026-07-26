@@ -138,6 +138,7 @@ const attackBtn = document.getElementById("attack-btn");
 const feedBtn = document.getElementById("feed-btn");
 const talkBtn = document.getElementById("talk-btn");
 const cameraViewBtn = document.getElementById("camera-view-btn");
+const photoBtn = document.getElementById("photo-btn");
 const exitHouseBtn = document.getElementById("exit-house-btn");
 const exitCarBtn = document.getElementById("exit-car-btn");
 const confirmPlaceBtn = document.getElementById("confirm-place-btn");
@@ -169,6 +170,7 @@ function updateHud() {
   rideBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
   soundBtn.classList.toggle("hidden", placing);
   cameraViewBtn.classList.toggle("hidden", placing);
+  photoBtn.classList.toggle("hidden", placing);
   exitHouseBtn.classList.toggle("hidden", mode !== "inside");
   exitCarBtn.classList.toggle("hidden", mode !== "town" || !driving || placing);
   confirmPlaceBtn.classList.toggle("hidden", !placing);
@@ -222,7 +224,7 @@ soundBtn.addEventListener("click", () => {
 // three.js の きほん セットアップ
 // ==========================================================
 const canvas = document.getElementById("game-canvas");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
 const scene = new THREE.Scene();
@@ -2408,6 +2410,28 @@ function cycleCameraView() {
   showMessage(`📷 してん: ${CAMERA_VIEWS[cameraViewIndex].label}`);
 }
 cameraViewBtn.addEventListener("click", cycleCameraView);
+
+function takePhoto() {
+  renderer.render(scene, camera);
+  const pad = (n) => String(n).padStart(2, "0");
+  const now = new Date();
+  const fileName = `machi-photo_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.png`;
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, "image/png");
+  playTone(880, 0.08);
+  playTone(1200, 0.1);
+  showMessage("📸 しゃしんを ほぞんしたよ！");
+}
+photoBtn.addEventListener("click", takePhoto);
 
 const cameraTarget = new THREE.Vector3();
 const desiredCamPos = new THREE.Vector3();
