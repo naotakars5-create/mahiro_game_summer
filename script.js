@@ -2661,6 +2661,76 @@ function applyInteriorTheme(themeIndex) {
   insideGroup.add(leaf);
 }
 
+// ---------- えいがかんの スクリーン ----------
+function makeMovieScreenTexture() {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 144;
+  const ctx2d = c.getContext("2d");
+  const grad = ctx2d.createLinearGradient(0, 0, 0, 144);
+  grad.addColorStop(0, "#ffe08a");
+  grad.addColorStop(0.55, "#ff9e6d");
+  grad.addColorStop(1, "#5a4a8a");
+  ctx2d.fillStyle = grad;
+  ctx2d.fillRect(0, 0, 256, 144);
+  ctx2d.fillStyle = "#fff6d9";
+  ctx2d.beginPath();
+  ctx2d.arc(190, 42, 24, 0, Math.PI * 2);
+  ctx2d.fill();
+  ctx2d.fillStyle = "#3d2b56";
+  ctx2d.beginPath();
+  ctx2d.moveTo(0, 144);
+  ctx2d.lineTo(0, 100);
+  ctx2d.lineTo(60, 60);
+  ctx2d.lineTo(120, 95);
+  ctx2d.lineTo(170, 55);
+  ctx2d.lineTo(256, 90);
+  ctx2d.lineTo(256, 144);
+  ctx2d.closePath();
+  ctx2d.fill();
+  return new THREE.CanvasTexture(c);
+}
+
+const cinemaScreenGroup = new THREE.Group();
+{
+  const bezel = new THREE.Mesh(
+    new THREE.BoxGeometry(3.8, 2.6, 0.1),
+    new THREE.MeshLambertMaterial({ color: 0x161616 })
+  );
+  bezel.position.set(0, 2.5, -3.48);
+  cinemaScreenGroup.add(bezel);
+
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.4, 2.2),
+    new THREE.MeshBasicMaterial({ map: makeMovieScreenTexture() })
+  );
+  screen.position.set(0, 2.5, -3.42);
+  cinemaScreenGroup.add(screen);
+
+  const curtainMat = new THREE.MeshLambertMaterial({ color: 0x7a1f2b });
+  [-1, 1].forEach((side) => {
+    const curtain = new THREE.Mesh(new THREE.BoxGeometry(0.5, 3.4, 0.15), curtainMat);
+    curtain.position.set(side * 2.2, 1.9, -3.45);
+    cinemaScreenGroup.add(curtain);
+  });
+
+  const seatMat = new THREE.MeshLambertMaterial({ color: 0x9d4edd });
+  const seatBackMat = new THREE.MeshLambertMaterial({ color: 0x6a2fa0 });
+  [-1.4, 0, 1.4].forEach((x) => {
+    [-1.4, -0.3].forEach((z) => {
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.35, 0.55), seatMat);
+      seat.position.set(x, 0.2, z);
+      cinemaScreenGroup.add(seat);
+      const back = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.1), seatBackMat);
+      back.position.set(x, 0.55, z + 0.24);
+      cinemaScreenGroup.add(back);
+    });
+  });
+
+  cinemaScreenGroup.visible = false;
+  insideGroup.add(cinemaScreenGroup);
+}
+
 // ---------- たてものの なかの ひと（てんいん・かぞく） ----------
 const INTERIOR_NPC_COLORS = {
   shop: { shirt: "#ffffff", pants: "#e63946" },
@@ -2700,6 +2770,7 @@ function enterBuilding(structure) {
   insideWallMat.color = col(shadeColor(structure.wallHex, 55));
   applyInteriorTheme(structure.interiorTheme || 0);
   setupInteriorNpc(structure.type);
+  cinemaScreenGroup.visible = structure.type === "cinema";
   townGroup.visible = false;
   insideGroup.visible = true;
   mode = "inside";
