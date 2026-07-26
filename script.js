@@ -12,6 +12,13 @@ const COLORS = [
   { key: "purple", name: "むらさき", hex: "#9d4edd", unlockAt: 30 },
 ];
 
+const FOOD_TYPES = [
+  { key: "apple", name: "りんご", emoji: "🍎" },
+  { key: "bread", name: "パン", emoji: "🍞" },
+  { key: "carrot", name: "にんじん", emoji: "🥕" },
+  { key: "onigiri", name: "おにぎり", emoji: "🍙" },
+];
+
 const HOUSE_RECIPE = { red: 4, gray: 3, blue: 1 };
 const BUILDING_RECIPE = { gray: 6, blue: 5, yellow: 2 };
 const SHOP_RECIPE = { yellow: 4, red: 3, blue: 2 };
@@ -21,6 +28,7 @@ const SAVE_KEY = "legoTown3dSave_v1";
 
 let state = {
   inventory: { red: 0, gray: 0, blue: 0, yellow: 0, green: 0, purple: 0 },
+  food: { apple: 0, bread: 0, carrot: 0, onigiri: 0 },
   totalCollected: 0,
   structures: [], // {type:'house'|'building'|'shop', x, z, paletteIndex}
   cars: [], // {x, z, colorIndex}
@@ -55,6 +63,7 @@ function saveState() {
   try {
     const toSave = {
       inventory: state.inventory,
+      food: state.food,
       totalCollected: state.totalCollected,
       structures: state.structures,
       cars: state.cars,
@@ -81,10 +90,24 @@ function loadState() {
 
 // ---------- おと ----------
 let audioCtx = null;
+function ensureAudio() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  } catch (e) {
+    // おとが つかえない かんきょうでも むしできるようにする
+  }
+}
+
+["pointerdown", "keydown", "touchstart"].forEach((evt) => {
+  window.addEventListener(evt, ensureAudio, { once: true });
+});
+
 function playTone(freq, duration) {
   if (!state.soundOn) return;
   try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    ensureAudio();
+    if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.frequency.value = freq;
@@ -107,6 +130,7 @@ const titleScreen = document.getElementById("title-screen");
 const gameScreen = document.getElementById("game-screen");
 const soundBtn = document.getElementById("sound-btn");
 const attackBtn = document.getElementById("attack-btn");
+const feedBtn = document.getElementById("feed-btn");
 const exitHouseBtn = document.getElementById("exit-house-btn");
 const exitCarBtn = document.getElementById("exit-car-btn");
 const confirmPlaceBtn = document.getElementById("confirm-place-btn");
@@ -129,6 +153,7 @@ function updateHud() {
   const placing = !!placementKind;
   buildButtons.forEach((b) => b.classList.toggle("hidden", mode === "inside" || placing || driving));
   attackBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
+  feedBtn.classList.toggle("hidden", mode !== "town" || driving || placing);
   soundBtn.classList.toggle("hidden", placing);
   exitHouseBtn.classList.toggle("hidden", mode !== "inside");
   exitCarBtn.classList.toggle("hidden", mode !== "town" || !driving || placing);
@@ -159,6 +184,18 @@ function renderInventory() {
     )
     .join("");
   document.getElementById("inventory").innerHTML = html;
+}
+
+function renderFoodInventory() {
+  const html = FOOD_TYPES.filter((f) => state.food[f.key] > 0)
+    .map(
+      (f) => `
+      <div class="inv-badge">
+        <span>${f.emoji} × ${state.food[f.key]}</span>
+      </div>`
+    )
+    .join("");
+  document.getElementById("food-inventory").innerHTML = html;
 }
 
 soundBtn.addEventListener("click", () => {
@@ -1181,6 +1218,107 @@ function checkBlockCollisions(pos) {
 }
 
 // ==========================================================
+// たべもの（あつめる アイテム）
+// ==========================================================
+const foodItems = []; // {group, key, baseY, spin}
+const MAX_FIELD_FOOD = 10;
+
+function createFoodMesh(key) {
+  const group = new THREE.Group();
+  if (key === "apple") {
+    const body = new THREE.Mesh(
+      new THREE.SphereGeometry(0.26, 12, 12),
+      new THREE.MeshLambertMaterial({ color: col("#e63946") })
+    );
+    group.add(body);
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.03, 0.03, 0.16, 6),
+      new THREE.MeshLambertMaterial({ color: col("#5b3a29") })
+    );
+    stem.position.y = 0.28;
+    group.add(stem);
+  } else if (key === "bread") {
+    const loaf = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.3, 0.32),
+      new THREE.MeshLambertMaterial({ color: col("#e0a458") })
+    );
+    group.add(loaf);
+    const top = new THREE.Mesh(
+      new THREE.SphereGeometry(0.24, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshLambertMaterial({ color: col("#f2c185") })
+    );
+    top.scale.set(1.05, 0.7, 0.7);
+    top.position.y = 0.14;
+    group.add(top);
+  } else if (key === "carrot") {
+    const root = new THREE.Mesh(
+      new THREE.ConeGeometry(0.16, 0.55, 8),
+      new THREE.MeshLambertMaterial({ color: col("#f4a259") })
+    );
+    root.rotation.x = Math.PI;
+    root.position.y = 0.275;
+    group.add(root);
+    const leaves = new THREE.Mesh(
+      new THREE.ConeGeometry(0.1, 0.3, 6),
+      new THREE.MeshLambertMaterial({ color: col("#4caf50") })
+    );
+    leaves.position.y = 0.65;
+    group.add(leaves);
+  } else {
+    const rice = new THREE.Mesh(
+      new THREE.ConeGeometry(0.28, 0.34, 3),
+      new THREE.MeshLambertMaterial({ color: col("#fffdf5") })
+    );
+    group.add(rice);
+    const nori = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, 0.36, 0.06),
+      new THREE.MeshLambertMaterial({ color: col("#2b2b2b") })
+    );
+    nori.position.z = 0.14;
+    group.add(nori);
+  }
+  return group;
+}
+
+function spawnFood() {
+  if (foodItems.length >= MAX_FIELD_FOOD) return;
+  const foodType = FOOD_TYPES[Math.floor(Math.random() * FOOD_TYPES.length)];
+
+  let x, z;
+  let tries = 0;
+  do {
+    x = (Math.random() * 2 - 1) * (FIELD_HALF_X - 2);
+    z = (Math.random() * 2 - 1) * (FIELD_HALF_Z - 2);
+    tries++;
+  } while (isNearAnyStructureOrCar(x, z, 4.5) && tries < 20);
+
+  const group = createFoodMesh(foodType.key);
+  group.position.set(x, 0.4, z);
+  townGroup.add(group);
+  foodItems.push({ group, key: foodType.key, baseY: 0.4, spin: Math.random() * Math.PI * 2 });
+}
+
+for (let i = 0; i < 6; i++) spawnFood();
+setInterval(() => {
+  if (mode === "town") spawnFood();
+}, 2600);
+
+function checkFoodCollisions(pos) {
+  for (let i = foodItems.length - 1; i >= 0; i--) {
+    const f = foodItems[i];
+    const dist = Math.hypot(pos.x - f.group.position.x, pos.z - f.group.position.z);
+    if (dist < 1.1) {
+      state.food[f.key]++;
+      townGroup.remove(f.group);
+      foodItems.splice(i, 1);
+      playTone(850, 0.1);
+      renderFoodInventory();
+      saveState();
+    }
+  }
+}
+
+// ==========================================================
 // たてものの ドアと くるまへの アクセス はんてい
 // ==========================================================
 function checkDoors(pos) {
@@ -1480,8 +1618,10 @@ function spawnNpc(rig, options) {
     target: null,
     phase: Math.random() * Math.PI * 2,
     isFlyer: !!options.isFlyer,
+    isAnimal: !!options.isAnimal,
     flyHeight: options.flyHeight || 0,
     hopTimer: 0,
+    happyTimer: 0,
   };
   npc.rig.group.position.set(npc.x, npc.isFlyer ? npc.flyHeight : 0, npc.z);
   npcs.push(npc);
@@ -1497,12 +1637,22 @@ for (let i = 0; i < 3; i++) {
   });
   spawnNpc(rig, { speed: 1.6 });
 }
-for (let i = 0; i < 2; i++) spawnNpc(createCow(), { speed: 1.1 });
-for (let i = 0; i < 2; i++) spawnNpc(createDog(), { speed: 2.2 });
-for (let i = 0; i < 2; i++) spawnNpc(createCat(), { speed: 1.9 });
-for (let i = 0; i < 2; i++) spawnNpc(createBird(), { speed: 2.6, isFlyer: true, flyHeight: 2.2 + Math.random() });
+for (let i = 0; i < 2; i++) spawnNpc(createCow(), { speed: 1.1, isAnimal: true });
+for (let i = 0; i < 2; i++) spawnNpc(createDog(), { speed: 2.2, isAnimal: true });
+for (let i = 0; i < 2; i++) spawnNpc(createCat(), { speed: 1.9, isAnimal: true });
+for (let i = 0; i < 2; i++)
+  spawnNpc(createBird(), { speed: 2.6, isFlyer: true, flyHeight: 2.2 + Math.random(), isAnimal: true });
 
 function updateNpc(npc, delta, time) {
+  if (npc.happyTimer > 0) {
+    npc.happyTimer -= delta;
+    npc.phase += delta * 16;
+    const hopOffset = Math.max(0, Math.sin(npc.phase * 3)) * 0.4;
+    npc.rig.group.position.set(npc.x, npc.isFlyer ? npc.flyHeight + hopOffset : hopOffset, npc.z);
+    npc.rig.group.rotation.y = npc.facing;
+    npc.rig.animate(npc.phase, true);
+    return;
+  }
   if (!npc.target || Math.hypot(npc.target.x - npc.x, npc.target.z - npc.z) < 0.6) {
     npc.target = {
       x: (Math.random() * 2 - 1) * NPC_WANDER_HALF_X,
@@ -1562,6 +1712,39 @@ function performAttack() {
   });
 }
 attackBtn.addEventListener("click", performAttack);
+
+// ---------- どうぶつに えさをあげる ----------
+function performFeed() {
+  if (mode !== "town" || drivingCar || placementKind) return;
+  const available = FOOD_TYPES.find((f) => state.food[f.key] > 0);
+  if (!available) {
+    showMessage("たべものが ないよ。まちで あつめてこよう！");
+    return;
+  }
+  let nearest = null;
+  let nearestDist = Infinity;
+  npcs.forEach((npc) => {
+    if (!npc.isAnimal) return;
+    const d = Math.hypot(npc.x - player.x, npc.z - player.z);
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearest = npc;
+    }
+  });
+  if (!nearest || nearestDist > 3.2) {
+    showMessage("ちかくに どうぶつが いないよ");
+    return;
+  }
+  state.food[available.key]--;
+  nearest.happyTimer = 0.8;
+  nearest.facing = Math.atan2(player.x - nearest.x, player.z - nearest.z);
+  playTone(760, 0.1);
+  playTone(950, 0.12);
+  showMessage(`${available.emoji} を あげたよ！よろこんでるね`);
+  renderFoodInventory();
+  saveState();
+}
+feedBtn.addEventListener("click", performFeed);
 
 // ==========================================================
 // カメラ
@@ -1695,6 +1878,7 @@ function animate() {
       carState.mesh.position.set(carState.x, 0, carState.z);
       if (moving) carState.mesh.rotation.y = carState.facing;
       checkBlockCollisions(carState);
+      checkFoodCollisions(carState);
       updateCamera(carState, delta);
     } else {
       const runSpeed = player.speed * (keys.run ? RUN_MULTIPLIER : 1);
@@ -1706,6 +1890,7 @@ function animate() {
       if (moving) walkPhase += delta * (keys.run ? 13 : 8);
       playerRig.animate(walkPhase, moving, punchAmount);
       checkBlockCollisions(player);
+      checkFoodCollisions(player);
       if (placementKind) {
         updatePlacementFrame();
       } else {
@@ -1732,6 +1917,12 @@ function animate() {
       b.group.position.y = b.baseY + Math.sin(time * 2 + b.spin) * 0.08;
     });
 
+    foodItems.forEach((f) => {
+      f.spin += delta * 1.1;
+      f.group.rotation.y = f.spin;
+      f.group.position.y = f.baseY + Math.sin(time * 2 + f.spin) * 0.08;
+    });
+
     clouds.forEach((cloud) => {
       const u = cloud.userData;
       cloud.position.set(
@@ -1751,15 +1942,18 @@ requestAnimationFrame(animate);
 // スタート
 // ==========================================================
 document.getElementById("start-btn").addEventListener("click", () => {
+  ensureAudio();
   titleScreen.classList.add("hidden");
   gameScreen.classList.remove("hidden");
   resizeRenderer();
   started = true;
   updateHud();
+  playTone(700, 0.15);
 });
 
 loadState();
 rebuildFromState();
 soundBtn.textContent = state.soundOn ? "🔊" : "🔇";
 renderInventory();
+renderFoodInventory();
 updateHud();
