@@ -11,7 +11,7 @@
   <!-- ====== タイトルがめん ====== -->
   <div id="title-screen" class="screen">
     <h1>🧱 レゴパーティー 🎉</h1>
-    <p class="sub">ブロックをあつめて、いえや ビル、おみせ、えいがかん、がっこう、こうえん、いけ、くるま、でんしゃ、じてんしゃを つくろう！</p>
+    <p class="sub">ブロックをあつめて、いえや ビル、おみせ、レストラン、えいがかん、がっこう、こうえん、いけ、くるま、でんしゃ、じてんしゃを つくろう！</p>
     <div class="slot-picker">
       <p class="slot-picker-label">あそぶ まちを えらんでね</p>
       <div class="slot-list">
@@ -42,6 +42,10 @@
         <li>「🏆じっせき」ボタンで、いままでの がんばりを チェックできるよ。たてものや くるまを たくさん つくると まちの ランクも あがるよ</li>
         <li>「してん」ボタンで カメラを きりかえられるよ。「しゃしん」ボタンで きねんさつえいも できるよ</li>
         <li>タイトルがめんで「まち1」「まち2」「まち3」から あそぶ まちを えらべるよ</li>
+        <li>ブロックを ゲットしたり、こうげきしたり、いろいろな おてつだいを すると「けいけんち」が たまって「レベル」が あがるよ。レベルが あがると はやく はしれたり、ぼうしや マントを てにいれたり できるよ</li>
+        <li>むらちょうさんに はなしかけると「📖ものがたり」が はじまるよ。おねがいされた ことを クリアして いくと、まちが どんどん にぎやかに なっていくよ</li>
+        <li>「えいがかん」の なかは くらくて、マネージャーに はなしかけると えいがを かえられるよ</li>
+        <li>「レストラン」の なかで「🍽たべる」ボタンを おすと、もっている たべものを たべられるよ</li>
       </ol>
     </div>
   </div>
@@ -52,13 +56,18 @@
       <div id="inventory" class="inventory"></div>
       <div id="food-inventory" class="inventory"></div>
       <span id="rank-badge" class="inv-badge">🏅 むら</span>
+      <span id="level-badge" class="inv-badge">⭐ レベル1</span>
+      <div id="xp-bar-track" class="xp-bar-track"><div id="xp-bar-fill" class="xp-bar-fill"></div></div>
       <div class="topbar-buttons">
         <button id="sound-btn" class="mini-btn">🔊</button>
         <button id="camera-view-btn" class="mini-btn">📷 してん</button>
         <button id="photo-btn" class="mini-btn">📸 しゃしん</button>
         <button id="achievements-toggle" class="mini-btn">🏆 じっせき</button>
+        <button id="story-toggle" class="mini-btn">📖 ものがたり</button>
         <button id="build-menu-toggle" class="mini-btn">🏗️ たてる ▾</button>
         <button id="shop-trade-btn" class="mini-btn hidden">🛒 こうかんする</button>
+        <button id="cinema-watch-btn" class="mini-btn hidden">🎬 えいがを みる</button>
+        <button id="restaurant-eat-btn" class="mini-btn hidden">🍽 たべる</button>
         <button id="exit-house-btn" class="mini-btn hidden">◀ そとに でる</button>
         <button id="exit-car-btn" class="mini-btn hidden">🚪 くるまを おりる</button>
         <button id="confirm-place-btn" class="mini-btn hidden">✅ ここに たてる</button>
@@ -67,6 +76,7 @@
       </div>
     </div>
     <div id="achievements-panel" class="inventory hidden"></div>
+    <div id="story-panel" class="inventory hidden"></div>
     <div id="build-menu" class="inventory hidden">
       <button id="build-house-btn" class="mini-btn build-trigger">🏠 いえ</button>
       <button id="build-building-btn" class="mini-btn build-trigger">🏢 ビル</button>

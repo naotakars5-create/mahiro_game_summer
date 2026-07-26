@@ -66,6 +66,9 @@ let state = {
   achievements: {}, // {id: true}
   lastRankName: null,
   soundOn: true,
+  xp: 0,
+  level: 1,
+  story: { started: false, stage: 0, progress: 0, done: false },
 };
 
 function shadeColor(hex, percent) {
@@ -103,6 +106,9 @@ function saveState() {
       achievements: state.achievements,
       lastRankName: state.lastRankName,
       soundOn: state.soundOn,
+      xp: state.xp,
+      level: state.level,
+      story: state.story,
     };
     localStorage.setItem(saveKeyFor(currentSlot), JSON.stringify(toSave));
   } catch (e) {
@@ -124,6 +130,11 @@ function loadState() {
       if (typeof state.inventory[c.key] !== "number") state.inventory[c.key] = 0;
     });
     if (!state.achievements || typeof state.achievements !== "object") state.achievements = {};
+    if (typeof state.xp !== "number") state.xp = 0;
+    if (typeof state.level !== "number") state.level = 1;
+    if (!state.story || typeof state.story !== "object") {
+      state.story = { started: false, stage: 0, progress: 0, done: false };
+    }
   } catch (e) {
     console.warn("よみこみに しっぱいしました", e);
   }
@@ -143,6 +154,8 @@ const ACHIEVEMENTS = [
   { id: "school_built", label: "がっこう かんせい", emoji: "🏫" },
   { id: "matsuri_food", label: "おまつりずき", emoji: "🏮" },
   { id: "night_watcher", label: "よふかしさん", emoji: "🌙" },
+  { id: "level_5", label: "レベル5に とうたつ", emoji: "⭐" },
+  { id: "story_clear", label: "ものがたり クリア", emoji: "📖" },
 ];
 
 function unlockAchievement(id) {
@@ -169,6 +182,158 @@ function renderAchievements() {
       const done = !!state.achievements[a.id];
       return `<div class="achievement-badge ${done ? "done" : ""}">${done ? a.emoji : "❔"} ${a.label}</div>`;
     }).join("");
+}
+
+// ---------- けいけんち・レベル ----------
+function xpForNextLevel(level) {
+  return 30 + (level - 1) * 20;
+}
+
+const LEVEL_PERKS = {
+  2: "はしる スピードが ちょっと あがった！",
+  3: "はなしかけられる きょりが ひろがった！",
+  4: "はしる スピードが ちょっと あがった！",
+  5: "ぼうしを てにいれた！",
+  6: "はしる スピードが ちょっと あがった！",
+  7: "アクションの とどく はんいが ひろがった！",
+  8: "マントを てにいれた！",
+  9: "はしる スピードが ちょっと あがった！",
+  10: "スーパーアクションを おぼえた！",
+};
+
+function playerSpeedForLevel(level) {
+  return 5.5 + (level - 1) * 0.25;
+}
+
+function talkRadiusBonus() {
+  return state.level >= 3 ? 1.0 : 0;
+}
+
+function actionRadiusBonus() {
+  return state.level >= 7 ? 1.0 : 0;
+}
+
+function onLevelUp(level) {
+  playTone(880, 0.1);
+  playTone(1100, 0.12);
+  playTone(1320, 0.1);
+  playTone(1600, 0.16);
+  player.speed = playerSpeedForLevel(level);
+  applyLevelCosmetics(level);
+  const perk = LEVEL_PERKS[level];
+  showMessage(`🌟 レベル${level}に なった！${perk ? " " + perk : ""}`);
+  if (level >= 5) unlockAchievement("level_5");
+}
+
+function addXp(amount) {
+  if (!amount) return;
+  state.xp += amount;
+  while (state.xp >= xpForNextLevel(state.level)) {
+    state.xp -= xpForNextLevel(state.level);
+    state.level++;
+    onLevelUp(state.level);
+  }
+  renderLevelBadge();
+  saveState();
+}
+
+function renderLevelBadge() {
+  const badge = document.getElementById("level-badge");
+  const bar = document.getElementById("xp-bar-fill");
+  if (badge) badge.textContent = `⭐ レベル${state.level}`;
+  if (bar) {
+    const need = xpForNextLevel(state.level);
+    bar.style.width = `${Math.min(100, Math.round((state.xp / need) * 100))}%`;
+  }
+}
+
+// ---------- ものがたり（むらちょうさんの おねがい） ----------
+const STORY_STAGES = [
+  { key: "collect_blocks", title: "はじめての おてつだい", hint: "ブロックを 10こ あつめてきて！", target: 10, rewardXp: 20 },
+  { key: "build_house", title: "じぶんの いえ", hint: "「いえ」を 1けん たてよう！", rewardXp: 25 },
+  { key: "feed_animal", title: "どうぶつと なかよく", hint: "どうぶつに たべものを あげよう！", rewardXp: 20 },
+  { key: "catch_fish", title: "つりに ちょうせん", hint: "「いけ」を つくって さかなを つろう！", rewardXp: 25 },
+  { key: "shop_trade", title: "おかいもの", hint: "「おみせ」で ブロックを こうかんしよう！", rewardXp: 20 },
+  { key: "watch_movie", title: "えいがかんへ", hint: "「えいがかん」の マネージャーに はなしかけて えいがを みよう！", rewardXp: 30 },
+  { key: "restaurant_eat", title: "ごはんの じかん", hint: "「レストラン」で ごはんを たべよう！", rewardXp: 30 },
+  { key: "grow_town", title: "まちを おおきく", hint: "たてものを あわせて 5つ たてよう！", target: 5, rewardXp: 50 },
+];
+
+function currentStoryStage() {
+  if (!state.story.started || state.story.done) return null;
+  return STORY_STAGES[state.story.stage] || null;
+}
+
+function advanceStory(key, amount = 1) {
+  const stage = currentStoryStage();
+  if (!stage || stage.key !== key) return;
+  if (stage.target) {
+    state.story.progress = key === "grow_town" ? state.structures.length : state.story.progress + amount;
+    if (state.story.progress < stage.target) {
+      renderStoryPanel();
+      saveState();
+      return;
+    }
+  }
+  completeStoryStage();
+}
+
+function completeStoryStage() {
+  const stage = STORY_STAGES[state.story.stage];
+  addXp(stage.rewardXp);
+  showMessage(`📖「${stage.title}」クリア！`);
+  playTone(1000, 0.12);
+  playTone(1300, 0.14);
+  playTone(1600, 0.16);
+  state.story.stage++;
+  state.story.progress = 0;
+  if (state.story.stage >= STORY_STAGES.length) {
+    state.story.done = true;
+    unlockAchievement("story_clear");
+  }
+  renderStoryPanel();
+  saveState();
+}
+
+function handleChiefTalk() {
+  if (!state.story.started) {
+    state.story.started = true;
+    state.story.stage = 0;
+    state.story.progress = 0;
+    showMessage("むらちょうさん「ようこそ！ この まちを もっと にぎやかに してほしいんじゃ。てつだって くれるかい？」");
+    renderStoryPanel();
+    saveState();
+    return;
+  }
+  if (state.story.done) {
+    showMessage("むらちょうさん「たくさん てつだって くれて ありがとう！ この まちは きみの おかげじゃ」");
+    return;
+  }
+  const stage = STORY_STAGES[state.story.stage];
+  const progressText = stage.target ? `（いま ${Math.min(state.story.progress, stage.target)}/${stage.target}）` : "";
+  showMessage(`むらちょうさん「${stage.hint}${progressText}」`);
+}
+
+function renderStoryPanel() {
+  if (!storyPanel) return;
+  if (!state.story.started) {
+    storyPanel.innerHTML =
+      `<div class="story-title">📖 ものがたり</div>` +
+      `<div class="story-hint">むらちょうさんに はなしかけて ぼうけんを はじめよう！</div>`;
+    return;
+  }
+  if (state.story.done) {
+    storyPanel.innerHTML =
+      `<div class="story-title">📖 ものがたり クリア！</div>` +
+      `<div class="story-hint">むらちょうさんの おねがいを ぜんぶ かなえたよ。ありがとう！</div>`;
+    return;
+  }
+  const stage = STORY_STAGES[state.story.stage];
+  const progressText = stage.target ? `（${Math.min(state.story.progress, stage.target)}/${stage.target}）` : "";
+  storyPanel.innerHTML =
+    `<div class="story-title">📖 ${state.story.stage + 1}/${STORY_STAGES.length}：${stage.title}</div>` +
+    `<div class="story-hint">${stage.hint}${progressText}</div>` +
+    `<div class="story-progress">むらちょうさんに はなしかけると すすみぐあいを おしえてくれるよ</div>`;
 }
 
 // ---------- まちの ランク ----------
@@ -254,10 +419,15 @@ const buildMenuToggle = document.getElementById("build-menu-toggle");
 const buildMenuPanel = document.getElementById("build-menu");
 const achievementsToggle = document.getElementById("achievements-toggle");
 const achievementsPanel = document.getElementById("achievements-panel");
+const storyToggle = document.getElementById("story-toggle");
+const storyPanel = document.getElementById("story-panel");
+const cinemaWatchBtn = document.getElementById("cinema-watch-btn");
+const restaurantEatBtn = document.getElementById("restaurant-eat-btn");
 const buildButtons = [
   document.getElementById("build-house-btn"),
   document.getElementById("build-building-btn"),
   document.getElementById("build-shop-btn"),
+  document.getElementById("build-restaurant-btn"),
   document.getElementById("build-cinema-btn"),
   document.getElementById("build-school-btn"),
   document.getElementById("build-park-btn"),
@@ -272,6 +442,7 @@ const buildButtons = [
 
 buildMenuToggle.addEventListener("click", () => buildMenuPanel.classList.toggle("hidden"));
 achievementsToggle.addEventListener("click", () => achievementsPanel.classList.toggle("hidden"));
+storyToggle.addEventListener("click", () => storyPanel.classList.toggle("hidden"));
 
 let mode = "town"; // 'town' | 'inside'
 
@@ -286,8 +457,12 @@ function updateHud() {
   photoBtn.classList.toggle("hidden", placing);
   achievementsToggle.classList.toggle("hidden", placing);
   if (placing) achievementsPanel.classList.add("hidden");
+  storyToggle.classList.toggle("hidden", placing);
+  if (placing) storyPanel.classList.add("hidden");
   exitHouseBtn.classList.toggle("hidden", mode !== "inside");
   shopTradeBtn.classList.toggle("hidden", !(mode === "inside" && currentBuilding && currentBuilding.type === "shop"));
+  cinemaWatchBtn.classList.toggle("hidden", !(mode === "inside" && currentBuilding && currentBuilding.type === "cinema"));
+  restaurantEatBtn.classList.toggle("hidden", !(mode === "inside" && currentBuilding && currentBuilding.type === "restaurant"));
   exitCarBtn.classList.toggle("hidden", mode !== "town" || !driving || placing);
   confirmPlaceBtn.classList.toggle("hidden", !placing);
   doneToyBtn.classList.toggle("hidden", placementKind !== "block");
@@ -869,6 +1044,29 @@ function createHumanoid(opts) {
 // たてものの なかに 入っても きえないように townGroup ではなく scene に ちょくせつ おく
 const playerRig = createHumanoid({ skin: "#f4c98f", shirt: "#5cc4f2", pants: "#3a4a63", scale: 1 });
 scene.add(playerRig.group);
+
+// ---------- レベルアップで てにいれる みため ----------
+const playerHat = new THREE.Mesh(
+  new THREE.ConeGeometry(0.28, 0.36, 8),
+  new THREE.MeshLambertMaterial({ color: col("#ff6b6b") })
+);
+playerHat.position.set(0, 2.18, 0);
+playerHat.visible = false;
+playerRig.group.add(playerHat);
+
+const playerCape = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.55, 0.75),
+  new THREE.MeshLambertMaterial({ color: col("#9d4edd"), side: THREE.DoubleSide })
+);
+playerCape.position.set(0, 1.05, -0.17);
+playerCape.rotation.x = 0.15;
+playerCape.visible = false;
+playerRig.group.add(playerCape);
+
+function applyLevelCosmetics(level) {
+  playerHat.visible = level >= 5;
+  playerCape.visible = level >= 8;
+}
 
 const player = {
   x: 0,
@@ -1990,6 +2188,19 @@ function isBlockedForPlayer(x, z) {
   }
   return false;
 }
+
+// ひとや どうぶつが くるま・たてものを すりぬけないように するための はんてい
+function isBlockedForNpc(x, z) {
+  for (const s of placedStructures) {
+    const r = (COLLISION_RADIUS[s.type] || 1.6) + 0.4;
+    if (Math.hypot(x - s.x, z - s.z) < r) return true;
+  }
+  for (const c of placedCars) {
+    const r = (COLLISION_RADIUS[c.type || "car"] || 1.3) + 0.4;
+    if (Math.hypot(x - c.x, z - c.z) < r) return true;
+  }
+  return false;
+}
 const GHOST_DISTANCE = {
   house: 4.5,
   building: 5,
@@ -2209,6 +2420,7 @@ function confirmPlacement() {
     spawnCar(x, z, placementGhostPaletteIndex, kind);
     state.cars.push({ x, z, colorIndex: placementGhostPaletteIndex, type: kind });
     showMessage(wasMoving ? `${VEHICLE_LABELS[kind]} を うごかしたよ` : `${VEHICLE_LABELS[kind]} が できた！ちかづくと のれるよ`);
+    if (!wasMoving) addXp(10);
   } else {
     placeStructureMesh(kind, x, z, placementGhostPaletteIndex, placementGhostInteriorTheme);
     state.structures.push({
@@ -2223,6 +2435,9 @@ function confirmPlacement() {
       if (kind === "school") unlockAchievement("school_built");
       if (state.structures.length >= 1) unlockAchievement("first_building");
       if (state.structures.length >= 5) unlockAchievement("five_buildings");
+      addXp(12);
+      if (kind === "house") advanceStory("build_house");
+      advanceStory("grow_town");
     }
   }
   playTone(wasMoving ? 650 : 900, wasMoving ? 0.15 : 0.2);
@@ -2386,6 +2601,7 @@ function performRide() {
   boardCar({ x: nearest.x, z: nearest.z, facing: nearest.facing, mesh: nearest.rig.group, type: "animal", npcRef: nearest, speed: nearest.speed * 2.4 });
   showMessage("🐄 うしに のったよ！");
   unlockAchievement("rider");
+  addXp(5);
 }
 
 // ---------- いけで さかなを つる ----------
@@ -2407,6 +2623,8 @@ function performFish() {
     playTone(900, 0.15);
     showMessage("🎣 さかなが つれたよ！");
     unlockAchievement("fisher");
+    addXp(10);
+    advanceStory("catch_fish");
   } else {
     showMessage("🎣 ざんねん、にげられちゃった…");
   }
@@ -2445,6 +2663,7 @@ function performYatai() {
   playTone(850, 0.12);
   showMessage(`🏮 やたいで 🍧かき氷を もらったよ！`);
   unlockAchievement("matsuri_food");
+  addXp(8);
   renderInventory();
   renderFoodInventory();
   saveState();
@@ -2476,6 +2695,41 @@ function isNearAnyStructureOrCar(x, z, radius) {
   return false;
 }
 
+// レゴブロックの おおきさ（スタッドの かず）と でやすさ
+const BLOCK_SIZES = [
+  { studs: 1, layout: [[0, 0]], weight: 60 },
+  { studs: 2, layout: [[-0.32, 0], [0.32, 0]], weight: 28 },
+  { studs: 4, layout: [[-0.32, -0.32], [0.32, -0.32], [-0.32, 0.32], [0.32, 0.32]], weight: 12 },
+];
+
+function pickBlockSize() {
+  const total = BLOCK_SIZES.reduce((sum, s) => sum + s.weight, 0);
+  let roll = Math.random() * total;
+  for (const s of BLOCK_SIZES) {
+    if (roll < s.weight) return s;
+    roll -= s.weight;
+  }
+  return BLOCK_SIZES[0];
+}
+
+function createFieldBlockMesh(hex, sizeDef) {
+  const group = new THREE.Group();
+  const w = sizeDef.studs === 1 ? 0.6 : sizeDef.studs === 2 ? 1.1 : 1.1;
+  const d = sizeDef.studs === 4 ? 1.1 : 0.6;
+  const brick = new THREE.Mesh(
+    new THREE.BoxGeometry(w, 0.6, d),
+    new THREE.MeshLambertMaterial({ color: col(hex) })
+  );
+  group.add(brick);
+  const studMat = new THREE.MeshLambertMaterial({ color: col(shadeColor(hex, -10)) });
+  sizeDef.layout.forEach(([sx, sz]) => {
+    const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.14, 10), studMat);
+    stud.position.set(sx, 0.37, sz);
+    group.add(stud);
+  });
+  return group;
+}
+
 function spawnBlock() {
   if (fieldBlocks.length >= MAX_FIELD_BLOCKS) return;
   const palette = unlockedColors();
@@ -2485,6 +2739,7 @@ function spawnBlock() {
     for (let i = 0; i < weight; i++) weighted.push(c.key);
   });
   const colorKey = weighted[Math.floor(Math.random() * weighted.length)];
+  const sizeDef = pickBlockSize();
 
   let x, z;
   let tries = 0;
@@ -2495,22 +2750,11 @@ function spawnBlock() {
   } while (isNearAnyStructureOrCar(x, z, 4.5) && tries < 20);
 
   const hex = colorHex(colorKey);
-  const group = new THREE.Group();
-  const cube = new THREE.Mesh(
-    new THREE.BoxGeometry(0.6, 0.6, 0.6),
-    new THREE.MeshLambertMaterial({ color: col(hex) })
-  );
-  group.add(cube);
-  const stud = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.14, 0.14, 0.14, 10),
-    new THREE.MeshLambertMaterial({ color: col(shadeColor(hex, -10)) })
-  );
-  stud.position.y = 0.37;
-  group.add(stud);
+  const group = createFieldBlockMesh(hex, sizeDef);
   group.position.set(x, 0.5, z);
   townGroup.add(group);
 
-  fieldBlocks.push({ group, colorKey, baseY: 0.5, spin: Math.random() * Math.PI * 2 });
+  fieldBlocks.push({ group, colorKey, studs: sizeDef.studs, baseY: 0.5, spin: Math.random() * Math.PI * 2 });
 }
 
 for (let i = 0; i < 16; i++) spawnBlock();
@@ -2523,11 +2767,14 @@ function checkBlockCollisions(pos) {
     const b = fieldBlocks[i];
     const dist = Math.hypot(pos.x - b.group.position.x, pos.z - b.group.position.z);
     if (dist < 1.1) {
-      state.inventory[b.colorKey]++;
-      state.totalCollected++;
+      state.inventory[b.colorKey] += b.studs;
+      state.totalCollected += b.studs;
       townGroup.remove(b.group);
       fieldBlocks.splice(i, 1);
       playTone(700, 0.12);
+      if (b.studs > 1) showMessage(`🧱 ${b.studs}こぶんの ブロックを ゲット！`);
+      addXp(b.studs * 2);
+      advanceStory("collect_blocks", b.studs);
       renderInventory();
       if (state.totalCollected >= 50) unlockAchievement("collector_50");
       saveState();
@@ -2726,65 +2973,261 @@ function applyInteriorTheme(themeIndex) {
   );
   picture.position.set(-2.3, 2.6, -3.49);
   insideGroup.add(picture);
+}
 
+// ---------- いえの なか ----------
+const houseFurnitureGroup = new THREE.Group();
+{
   const bed = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.6, 3.2), insideBedMat);
   bed.position.set(-3, 0.3, -1.6);
-  insideGroup.add(bed);
+  houseFurnitureGroup.add(bed);
   const pillow = new THREE.Mesh(
     new THREE.BoxGeometry(1.6, 0.25, 0.8),
     new THREE.MeshLambertMaterial({ color: 0xfffdf5 })
   );
   pillow.position.set(-3, 0.72, -2.9);
-  insideGroup.add(pillow);
+  houseFurnitureGroup.add(pillow);
 
   const table = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.7, 1.4), insideTableMat);
   table.position.set(2.6, 0.35, 1.6);
-  insideGroup.add(table);
+  houseFurnitureGroup.add(table);
 
   const rug = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.05, 24), insideRugMat);
   rug.position.set(0, 0.03, 1.2);
-  insideGroup.add(rug);
+  houseFurnitureGroup.add(rug);
 
   const leafMat = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
   const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.24, 0.4, 10), insidePotMat);
   pot.position.set(3.6, 0.2, -2.8);
-  insideGroup.add(pot);
+  houseFurnitureGroup.add(pot);
   const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 10), leafMat);
   leaf.position.set(3.6, 0.75, -2.8);
-  insideGroup.add(leaf);
+  houseFurnitureGroup.add(leaf);
+
+  insideGroup.add(houseFurnitureGroup);
+}
+
+// ---------- おみせの なか ----------
+const shopFurnitureGroup = new THREE.Group();
+{
+  const counterMat = new THREE.MeshLambertMaterial({ color: col("#deb887") });
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 0.6), counterMat);
+  counter.position.set(1.6, 0.45, -1.7);
+  shopFurnitureGroup.add(counter);
+  const register = new THREE.Mesh(
+    new THREE.BoxGeometry(0.4, 0.3, 0.3),
+    new THREE.MeshLambertMaterial({ color: col("#333333") })
+  );
+  register.position.set(1.6, 1.05, -1.7);
+  shopFurnitureGroup.add(register);
+
+  const shelfMat = new THREE.MeshLambertMaterial({ color: col("#a4753f") });
+  const shelf = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.6, 0.4), shelfMat);
+  shelf.position.set(-1.8, 1.0, -3.3);
+  shopFurnitureGroup.add(shelf);
+  const goodsColors = ["#e63946", "#f9c74f", "#48cae4", "#43aa8b", "#9d4edd"];
+  for (let i = 0; i < 5; i++) {
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, 0.4, 0.3),
+      new THREE.MeshLambertMaterial({ color: col(goodsColors[i]) })
+    );
+    box.position.set(-3.2 + i * 0.75, 1.55, -3.15);
+    shopFurnitureGroup.add(box);
+  }
+  shopFurnitureGroup.visible = false;
+  insideGroup.add(shopFurnitureGroup);
+}
+
+// ---------- ビルの なか ----------
+const buildingFurnitureGroup = new THREE.Group();
+{
+  const deskMat = new THREE.MeshLambertMaterial({ color: col("#5b3a29") });
+  const desk = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.7, 0.9), deskMat);
+  desk.position.set(0, 0.35, -2.6);
+  buildingFurnitureGroup.add(desk);
+  const monitor = new THREE.Mesh(
+    new THREE.BoxGeometry(0.6, 0.45, 0.06),
+    new THREE.MeshLambertMaterial({ color: col("#2d2d2d") })
+  );
+  monitor.position.set(0, 0.95, -2.85);
+  buildingFurnitureGroup.add(monitor);
+  const screenGlow = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.5, 0.35),
+    new THREE.MeshBasicMaterial({ color: col("#48cae4") })
+  );
+  screenGlow.position.set(0, 0.95, -2.81);
+  buildingFurnitureGroup.add(screenGlow);
+  const chair = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5, 0.5, 0.5),
+    new THREE.MeshLambertMaterial({ color: col("#2d2d2d") })
+  );
+  chair.position.set(0, 0.25, -1.6);
+  buildingFurnitureGroup.add(chair);
+  const shelf2 = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5, 2.2, 1.4),
+    new THREE.MeshLambertMaterial({ color: col("#8a5a2b") })
+  );
+  shelf2.position.set(3.9, 1.1, -1.0);
+  buildingFurnitureGroup.add(shelf2);
+  const pot2 = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.3, 0.24, 0.4, 10),
+    new THREE.MeshLambertMaterial({ color: col("#a4753f") })
+  );
+  pot2.position.set(-3.6, 0.2, -2.8);
+  buildingFurnitureGroup.add(pot2);
+  const leaf2 = new THREE.Mesh(
+    new THREE.SphereGeometry(0.4, 10, 10),
+    new THREE.MeshLambertMaterial({ color: 0x4caf50 })
+  );
+  leaf2.position.set(-3.6, 0.75, -2.8);
+  buildingFurnitureGroup.add(leaf2);
+  buildingFurnitureGroup.visible = false;
+  insideGroup.add(buildingFurnitureGroup);
+}
+
+// ---------- がっこうの なか ----------
+const schoolFurnitureGroup = new THREE.Group();
+{
+  const board = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.0, 1.3),
+    new THREE.MeshLambertMaterial({ color: col("#2f5233") })
+  );
+  board.position.set(0, 2.0, -3.49);
+  schoolFurnitureGroup.add(board);
+
+  const deskMat = new THREE.MeshLambertMaterial({ color: col("#c9975b") });
+  const chairMat = new THREE.MeshLambertMaterial({ color: col("#5b3a29") });
+  for (let row = 0; row < 2; row++) {
+    for (let colI = 0; colI < 3; colI++) {
+      const dx = -1.8 + colI * 1.8;
+      const dz = 0.6 + row * 1.4;
+      const desk = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.55, 0.5), deskMat);
+      desk.position.set(dx, 0.275, dz);
+      schoolFurnitureGroup.add(desk);
+      const chair = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.4), chairMat);
+      chair.position.set(dx, 0.25, dz + 0.5);
+      schoolFurnitureGroup.add(chair);
+    }
+  }
+  const teacherDesk = new THREE.Mesh(
+    new THREE.BoxGeometry(1.4, 0.7, 0.7),
+    new THREE.MeshLambertMaterial({ color: col("#8a5a2b") })
+  );
+  teacherDesk.position.set(0, 0.35, -2.6);
+  schoolFurnitureGroup.add(teacherDesk);
+  schoolFurnitureGroup.visible = false;
+  insideGroup.add(schoolFurnitureGroup);
+}
+
+// ---------- レストランの なか ----------
+const restaurantFurnitureGroup = new THREE.Group();
+{
+  const counter2 = new THREE.Mesh(
+    new THREE.BoxGeometry(2.2, 0.9, 0.6),
+    new THREE.MeshLambertMaterial({ color: col("#8a5a2b") })
+  );
+  counter2.position.set(-2.8, 0.45, -3.0);
+  restaurantFurnitureGroup.add(counter2);
+  const pot3 = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.25, 0.25, 0.3, 12),
+    new THREE.MeshLambertMaterial({ color: col("#adb5bd") })
+  );
+  pot3.position.set(-2.8, 1.05, -3.0);
+  restaurantFurnitureGroup.add(pot3);
+
+  const tableMat = new THREE.MeshLambertMaterial({ color: col("#fff8ec") });
+  const diningChairMat = new THREE.MeshLambertMaterial({ color: col("#e63946") });
+  [[-1.6, 0.6], [1.6, 0.6]].forEach(([tx, tz]) => {
+    const table = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.55, 16), tableMat);
+    table.position.set(tx, 0.275, tz);
+    restaurantFurnitureGroup.add(table);
+    [[-0.75, 0], [0.75, 0], [0, -0.75], [0, 0.75]].forEach(([cx, cz]) => {
+      const chair = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.5, 0.35), diningChairMat);
+      chair.position.set(tx + cx, 0.25, tz + cz);
+      restaurantFurnitureGroup.add(chair);
+    });
+  });
+  restaurantFurnitureGroup.visible = false;
+  insideGroup.add(restaurantFurnitureGroup);
 }
 
 // ---------- えいがかんの スクリーン ----------
-function makeMovieScreenTexture() {
+const MOVIES = [
+  { title: "ゆうやけの ぼうけん", top: "#ffe08a", mid: "#ff9e6d", bottom: "#5a4a8a", shape: "mountain" },
+  { title: "きょうりゅうの くに", top: "#bfe6b0", mid: "#7fbf6a", bottom: "#2f5233", shape: "dino" },
+  { title: "うちゅうの たび", top: "#0b1030", mid: "#1c1f4a", bottom: "#000010", shape: "stars" },
+  { title: "うみの なかまたち", top: "#bdeaff", mid: "#48cae4", bottom: "#023e73", shape: "waves" },
+  { title: "ゆきの おしろ", top: "#eaf6ff", mid: "#cfeaff", bottom: "#7fb8e0", shape: "castle" },
+];
+
+function makeMovieScreenTexture(movie) {
   const c = document.createElement("canvas");
   c.width = 256;
   c.height = 144;
   const ctx2d = c.getContext("2d");
   const grad = ctx2d.createLinearGradient(0, 0, 0, 144);
-  grad.addColorStop(0, "#ffe08a");
-  grad.addColorStop(0.55, "#ff9e6d");
-  grad.addColorStop(1, "#5a4a8a");
+  grad.addColorStop(0, movie.top);
+  grad.addColorStop(0.55, movie.mid);
+  grad.addColorStop(1, movie.bottom);
   ctx2d.fillStyle = grad;
   ctx2d.fillRect(0, 0, 256, 144);
-  ctx2d.fillStyle = "#fff6d9";
-  ctx2d.beginPath();
-  ctx2d.arc(190, 42, 24, 0, Math.PI * 2);
-  ctx2d.fill();
-  ctx2d.fillStyle = "#3d2b56";
-  ctx2d.beginPath();
-  ctx2d.moveTo(0, 144);
-  ctx2d.lineTo(0, 100);
-  ctx2d.lineTo(60, 60);
-  ctx2d.lineTo(120, 95);
-  ctx2d.lineTo(170, 55);
-  ctx2d.lineTo(256, 90);
-  ctx2d.lineTo(256, 144);
-  ctx2d.closePath();
-  ctx2d.fill();
+
+  if (movie.shape === "stars") {
+    ctx2d.fillStyle = "#ffffff";
+    for (let i = 0; i < 40; i++) {
+      ctx2d.fillRect(Math.random() * 256, Math.random() * 90, 2, 2);
+    }
+  } else if (movie.shape === "waves") {
+    ctx2d.fillStyle = "rgba(255,255,255,0.6)";
+    for (let w = 0; w < 3; w++) {
+      ctx2d.beginPath();
+      ctx2d.moveTo(0, 100 + w * 12);
+      for (let x = 0; x <= 256; x += 16) ctx2d.lineTo(x, 100 + w * 12 + Math.sin(x * 0.05 + w) * 6);
+      ctx2d.lineTo(256, 144);
+      ctx2d.lineTo(0, 144);
+      ctx2d.closePath();
+      ctx2d.fill();
+    }
+  } else if (movie.shape === "castle") {
+    ctx2d.fillStyle = "#ffffff";
+    ctx2d.fillRect(90, 60, 76, 60);
+    ctx2d.fillRect(80, 40, 20, 30);
+    ctx2d.fillRect(156, 40, 20, 30);
+    ctx2d.fillRect(115, 20, 26, 50);
+  } else if (movie.shape === "dino") {
+    ctx2d.fillStyle = "#274d1f";
+    ctx2d.beginPath();
+    ctx2d.ellipse(120, 100, 50, 24, 0, 0, Math.PI * 2);
+    ctx2d.fill();
+    ctx2d.beginPath();
+    ctx2d.moveTo(160, 90);
+    ctx2d.lineTo(210, 60);
+    ctx2d.lineTo(190, 100);
+    ctx2d.closePath();
+    ctx2d.fill();
+  } else {
+    ctx2d.fillStyle = "#fff6d9";
+    ctx2d.beginPath();
+    ctx2d.arc(190, 42, 24, 0, Math.PI * 2);
+    ctx2d.fill();
+    ctx2d.fillStyle = "#3d2b56";
+    ctx2d.beginPath();
+    ctx2d.moveTo(0, 144);
+    ctx2d.lineTo(0, 100);
+    ctx2d.lineTo(60, 60);
+    ctx2d.lineTo(120, 95);
+    ctx2d.lineTo(170, 55);
+    ctx2d.lineTo(256, 90);
+    ctx2d.lineTo(256, 144);
+    ctx2d.closePath();
+    ctx2d.fill();
+  }
   return new THREE.CanvasTexture(c);
 }
 
+let currentMovieIndex = 0;
 const cinemaScreenGroup = new THREE.Group();
+let cinemaScreenMesh = null;
 {
   const bezel = new THREE.Mesh(
     new THREE.BoxGeometry(3.8, 2.6, 0.1),
@@ -2795,10 +3238,11 @@ const cinemaScreenGroup = new THREE.Group();
 
   const screen = new THREE.Mesh(
     new THREE.PlaneGeometry(3.4, 2.2),
-    new THREE.MeshBasicMaterial({ map: makeMovieScreenTexture() })
+    new THREE.MeshBasicMaterial({ map: makeMovieScreenTexture(MOVIES[0]) })
   );
   screen.position.set(0, 2.5, -3.42);
   cinemaScreenGroup.add(screen);
+  cinemaScreenMesh = screen;
 
   const curtainMat = new THREE.MeshLambertMaterial({ color: 0x7a1f2b });
   [-1, 1].forEach((side) => {
@@ -2837,9 +3281,25 @@ const INTERIOR_NPC_LABEL = {
   shop: "てんいんさん",
   building: "けいびいん",
   house: "かぞく",
-  cinema: "えいがかんの スタッフ",
+  cinema: "えいがかんの マネージャー",
   school: "せんせい",
   restaurant: "コックさん",
+};
+const INTERIOR_NPC_POS = {
+  house: { x: 1.6, z: -0.6, rot: 0 },
+  shop: { x: 1.6, z: -1.35, rot: Math.PI },
+  building: { x: 0, z: -1.9, rot: Math.PI },
+  school: { x: 0, z: -1.9, rot: Math.PI },
+  cinema: { x: -1.6, z: -1.0, rot: 0.4 },
+  restaurant: { x: -2.8, z: -1.6, rot: Math.PI },
+};
+const INTERIOR_FURNITURE_GROUPS = {
+  house: houseFurnitureGroup,
+  shop: shopFurnitureGroup,
+  building: buildingFurnitureGroup,
+  school: schoolFurnitureGroup,
+  cinema: cinemaScreenGroup,
+  restaurant: restaurantFurnitureGroup,
 };
 let interiorNpc = null;
 
@@ -2849,9 +3309,10 @@ function setupInteriorNpc(type) {
     interiorNpc = null;
   }
   const cfg = INTERIOR_NPC_COLORS[type] || INTERIOR_NPC_COLORS.house;
+  const pos = INTERIOR_NPC_POS[type] || INTERIOR_NPC_POS.house;
   const rig = createHumanoid({ skin: "#f4c98f", shirt: cfg.shirt, pants: cfg.pants, scale: 0.95 });
-  rig.group.position.set(1.6, 0, -0.6);
-  rig.group.rotation.y = 0;
+  rig.group.position.set(pos.x, 0, pos.z);
+  rig.group.rotation.y = pos.rot;
   insideGroup.add(rig.group);
   interiorNpc = { rig, phase: 0 };
 }
@@ -2865,7 +3326,9 @@ function enterBuilding(structure) {
   insideWallMat.color = col(shadeColor(structure.wallHex, 55));
   applyInteriorTheme(structure.interiorTheme || 0);
   setupInteriorNpc(structure.type);
-  cinemaScreenGroup.visible = structure.type === "cinema";
+  Object.entries(INTERIOR_FURNITURE_GROUPS).forEach(([type, group]) => {
+    group.visible = type === structure.type;
+  });
   townGroup.visible = false;
   insideGroup.visible = true;
   mode = "inside";
@@ -3048,11 +3511,22 @@ for (let i = 0; i < 2; i++) spawnNpc(createCat(), { speed: 1.9, isAnimal: true, 
 for (let i = 0; i < 2; i++)
   spawnNpc(createBird(), { speed: 2.6, isFlyer: true, flyHeight: 2.2 + Math.random(), isAnimal: true, kind: "bird" });
 
+// ---------- むらちょうさん（ものがたりを すすめる ひと） ----------
+const chiefRig = createHumanoid({ skin: "#f4c98f", shirt: "#5b3a29", pants: "#2d2d2d", scale: 1.05 });
+const chiefHat = new THREE.Mesh(
+  new THREE.ConeGeometry(0.3, 0.4, 8),
+  new THREE.MeshLambertMaterial({ color: col("#f9c74f") })
+);
+chiefHat.position.set(0, 2.22, 0);
+chiefRig.group.add(chiefHat);
+spawnNpc(chiefRig, { speed: 1.2 });
+npcs[npcs.length - 1].isChief = true;
+
 // ---------- ひとからの おねがい（クエスト） ----------
 const QUEST_REWARD_FOOD_COUNT = 2;
 
 function assignRandomQuest() {
-  const candidates = npcs.filter((n) => !n.isAnimal && !n.quest);
+  const candidates = npcs.filter((n) => !n.isAnimal && !n.quest && !n.isChief);
   if (!candidates.length) return;
   const npc = candidates[Math.floor(Math.random() * candidates.length)];
   const palette = unlockedColors();
@@ -3100,9 +3574,18 @@ function updateNpc(npc, delta, time) {
   if (moving) {
     const nx = dx / dist;
     const nz = dz / dist;
-    npc.x += nx * speed * delta;
-    npc.z += nz * speed * delta;
-    npc.facing = Math.atan2(nx, nz);
+    const nextX = npc.x + nx * speed * delta;
+    const nextZ = npc.z + nz * speed * delta;
+    if (!npc.isFlyer && isBlockedForNpc(nextX, nextZ)) {
+      npc.target = {
+        x: (Math.random() * 2 - 1) * NPC_WANDER_HALF_X,
+        z: (Math.random() * 2 - 1) * NPC_WANDER_HALF_Z,
+      };
+    } else {
+      npc.x = nextX;
+      npc.z = nextZ;
+      npc.facing = Math.atan2(nx, nz);
+    }
   }
   npc.phase += delta * (npc.hopTimer > 0 ? 14 : 6);
   npc.rig.group.position.x = npc.x;
@@ -3124,12 +3607,15 @@ function updateNpc(npc, delta, time) {
 
 // ---------- こうげき（パンチ） ----------
 function performAttack() {
-  if (mode !== "town" || drivingCar || placementKind) return;
+  if (mode !== "town" || drivingCar || placementKind || attackTimer > 0) return;
   attackTimer = ATTACK_DURATION;
   playTone(220, 0.1);
+  const radius = 3.2 + actionRadiusBonus();
+  let hitSomething = false;
   npcs.forEach((npc) => {
     const d = Math.hypot(npc.x - player.x, npc.z - player.z);
-    if (d < 3.2 && d > 0.01) {
+    if (d < radius && d > 0.01) {
+      hitSomething = true;
       npc.hopTimer = 0.4;
       const awayX = (npc.x - player.x) / d;
       const awayZ = (npc.z - player.z) / d;
@@ -3141,8 +3627,12 @@ function performAttack() {
   });
   trees.forEach((t) => {
     const d = Math.hypot(t.x - player.x, t.z - player.z);
-    if (d < 2.6) t.shakeTimer = 0.6;
+    if (d < 2.6 + actionRadiusBonus()) {
+      t.shakeTimer = 0.6;
+      hitSomething = true;
+    }
   });
+  if (hitSomething) addXp(3);
 }
 
 // ---------- どうぶつに えさをあげる ----------
@@ -3173,6 +3663,8 @@ function performFeed() {
   playTone(760, 0.1);
   playTone(950, 0.12);
   showMessage(`${available.emoji} を あげたよ！よろこんでるね`);
+  addXp(6);
+  advanceStory("feed_animal");
   renderFoodInventory();
   saveState();
 }
@@ -3230,7 +3722,7 @@ function performTalk() {
       nearest = npc;
     }
   });
-  if (!nearest || nearestDist > 3.2) {
+  if (!nearest || nearestDist > 3.2 + talkRadiusBonus()) {
     showMessage("ちかくに はなせる ひとが いないよ");
     return;
   }
@@ -3239,6 +3731,10 @@ function performTalk() {
   playTone(700, 0.1);
   playTone(880, 0.12);
   unlockAchievement("talker");
+  if (nearest.isChief) {
+    handleChiefTalk();
+    return;
+  }
   if (nearest.quest) {
     const q = nearest.quest;
     const colorName = COLORS.find((c) => c.key === q.colorKey).name;
@@ -3253,6 +3749,7 @@ function performTalk() {
       playTone(1300, 0.14);
       showMessage(`「${colorName}ブロック ありがとう！」 おれいに ${food.emoji}×${QUEST_REWARD_FOOD_COUNT} を もらったよ！`);
       unlockAchievement("quest_complete");
+      addXp(15);
       renderInventory();
       renderFoodInventory();
       saveState();
@@ -3289,11 +3786,69 @@ function performShopTrade() {
   playTone(980, 0.12);
   showMessage(`${colorName}ブロックを ${SHOP_TRADE_COST}こ わたして、${food.emoji} を もらったよ！`);
   unlockAchievement("shop_trade");
+  addXp(8);
+  advanceStory("shop_trade");
   renderInventory();
   renderFoodInventory();
   saveState();
 }
 shopTradeBtn.addEventListener("click", performShopTrade);
+
+// ---------- えいがかんで えいがを リクエストする ----------
+function performCinemaWatch() {
+  if (mode !== "inside" || !currentBuilding || currentBuilding.type !== "cinema") return;
+  currentMovieIndex = (currentMovieIndex + 1) % MOVIES.length;
+  const movie = MOVIES[currentMovieIndex];
+  cinemaScreenMesh.material.map = makeMovieScreenTexture(movie);
+  cinemaScreenMesh.material.needsUpdate = true;
+  playTone(500, 0.1);
+  playTone(750, 0.12);
+  playTone(950, 0.14);
+  showMessage(`マネージャー「『${movie.title}』を じょうえいするね！」`);
+  addXp(12);
+  advanceStory("watch_movie");
+  saveState();
+}
+cinemaWatchBtn.addEventListener("click", performCinemaWatch);
+
+// ---------- レストランで ごはんを たべる ----------
+const RESTAURANT_MEAL_COST = 3;
+function performRestaurantEat() {
+  if (mode !== "inside" || !currentBuilding || currentBuilding.type !== "restaurant") return;
+  const available = FOOD_TYPES.find((f) => state.food[f.key] > 0);
+  if (available) {
+    state.food[available.key]--;
+    playTone(700, 0.1);
+    playTone(950, 0.14);
+    showMessage(`🍽 ${available.emoji}を たべたよ！ とても おいしい！`);
+    addXp(10);
+    advanceStory("restaurant_eat");
+    renderFoodInventory();
+    saveState();
+    return;
+  }
+  let bestKey = null;
+  let bestCount = 0;
+  COLORS.forEach((c) => {
+    if (state.inventory[c.key] > bestCount) {
+      bestCount = state.inventory[c.key];
+      bestKey = c.key;
+    }
+  });
+  if (!bestKey || bestCount < RESTAURANT_MEAL_COST) {
+    showMessage(`コック「たべものが ないみたい。ブロックが ${RESTAURANT_MEAL_COST}こ あれば つくってあげるよ」`);
+    return;
+  }
+  state.inventory[bestKey] -= RESTAURANT_MEAL_COST;
+  playTone(700, 0.1);
+  playTone(950, 0.14);
+  showMessage("🍽 コックが つくってくれた ごはんを たべたよ！ とても おいしい！");
+  addXp(10);
+  advanceStory("restaurant_eat");
+  renderInventory();
+  saveState();
+}
+restaurantEatBtn.addEventListener("click", performRestaurantEat);
 
 // ==========================================================
 // カメラ（してんを きりかえられる）
@@ -3404,7 +3959,7 @@ function performAction() {
     const d = Math.hypot(npc.x - player.x, npc.z - player.z);
     if (d < nearestHumanDist) nearestHumanDist = d;
   });
-  if (nearestHumanDist <= 3.2) {
+  if (nearestHumanDist <= 3.2 + talkRadiusBonus()) {
     performTalk();
     return;
   }
@@ -3527,6 +4082,10 @@ function animate() {
   }
 
   if (mode === "inside") {
+    if (currentBuilding && currentBuilding.type === "cinema") {
+      ambientLight.intensity = 0.1;
+      sunLight.intensity = 0.02;
+    }
     const moving = applyMovement(player, 3.5, delta, (a) => (player.facing = a));
     player.x = Math.max(-3.9, Math.min(3.9, player.x));
     if (player.z > 3.1) {
@@ -3700,6 +4259,10 @@ document.getElementById("start-btn").addEventListener("click", () => {
   renderFoodInventory();
   renderAchievements();
   updateTownRank();
+  player.speed = playerSpeedForLevel(state.level);
+  applyLevelCosmetics(state.level);
+  renderLevelBadge();
+  renderStoryPanel();
   titleScreen.classList.add("hidden");
   gameScreen.classList.remove("hidden");
   resizeRenderer();
