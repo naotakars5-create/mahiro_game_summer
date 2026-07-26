@@ -276,7 +276,7 @@ for (let i = 0; i < 6; i++) {
 // ==========================================================
 const FIELD_HALF_X = 50;
 const FIELD_HALF_Z = 44;
-const ROAD_HALF_W = 3.2;
+const ROAD_HALF_W = 6.5;
 
 const townGroup = new THREE.Group();
 scene.add(townGroup);
@@ -311,21 +311,26 @@ mainRoad.rotation.x = -Math.PI / 2;
 mainRoad.position.y = 0.015;
 townGroup.add(mainRoad);
 
-for (let i = -1; i <= 1; i += 2) {
-  const line = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.15, 1.4),
-    new THREE.MeshBasicMaterial({ color: 0xfff4d6 })
-  );
-  line.rotation.x = -Math.PI / 2;
-  line.position.set(0, 0.02, 0);
-  // ダッシュせんを くりかえし はいち
-  for (let z = -FIELD_HALF_Z + 1; z < FIELD_HALF_Z; z += 3) {
-    const dash = line.clone();
-    dash.position.z = z;
-    townGroup.add(dash);
-  }
-  break;
+// まんなかの ダッシュせん
+const dashTemplate = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.15, 1.4),
+  new THREE.MeshBasicMaterial({ color: 0xfff4d6 })
+);
+dashTemplate.rotation.x = -Math.PI / 2;
+for (let z = -FIELD_HALF_Z + 1; z < FIELD_HALF_Z; z += 3) {
+  const dash = dashTemplate.clone();
+  dash.position.set(0, 0.02, z);
+  townGroup.add(dash);
 }
+
+// りょうはしの しろい せん
+const edgeLineMat = new THREE.MeshBasicMaterial({ color: 0xfff8ec });
+[-1, 1].forEach((side) => {
+  const edge = new THREE.Mesh(new THREE.PlaneGeometry(0.2, FIELD_HALF_Z * 2), edgeLineMat);
+  edge.rotation.x = -Math.PI / 2;
+  edge.position.set(side * (ROAD_HALF_W - 0.25), 0.02, 0);
+  townGroup.add(edge);
+});
 
 // ---------- き ----------
 function isInRoadZone(x) {
@@ -996,6 +1001,34 @@ function spawnCar(x, z, colorIndex, type) {
 
 document.getElementById("build-car-btn").addEventListener("click", () => requestBuild("car"));
 document.getElementById("build-train-btn").addEventListener("click", () => requestBuild("train"));
+
+// ==========================================================
+// どうろを はしる ほかの くるま（かざり）
+// ==========================================================
+const TRAFFIC_COLORS = ["#e63946", "#48cae4", "#f9c74f", "#43aa8b", "#9d4edd", "#f28482"];
+const trafficCars = []; // {mesh, x, z, dir, speed}
+
+function spawnTrafficCar(dir) {
+  const color = TRAFFIC_COLORS[Math.floor(Math.random() * TRAFFIC_COLORS.length)];
+  const mesh = createCarMesh(color);
+  const lane = dir > 0 ? -ROAD_HALF_W * 0.45 : ROAD_HALF_W * 0.45;
+  const z = (Math.random() * 2 - 1) * FIELD_HALF_Z;
+  mesh.position.set(lane, 0, z);
+  mesh.rotation.y = dir > 0 ? 0 : Math.PI;
+  townGroup.add(mesh);
+  trafficCars.push({ mesh, x: lane, z, dir, speed: 5 + Math.random() * 3 });
+}
+for (let i = 0; i < 3; i++) spawnTrafficCar(1);
+for (let i = 0; i < 3; i++) spawnTrafficCar(-1);
+
+function updateTraffic(delta) {
+  trafficCars.forEach((t) => {
+    t.z += t.dir * t.speed * delta;
+    if (t.z > FIELD_HALF_Z + 3) t.z = -FIELD_HALF_Z - 3;
+    if (t.z < -FIELD_HALF_Z - 3) t.z = FIELD_HALF_Z + 3;
+    t.mesh.position.set(t.x, 0, t.z);
+  });
+}
 
 // ==========================================================
 // おもちゃ（じゆうに おける ブロック）
@@ -2158,6 +2191,7 @@ function animate() {
     }
 
     npcs.forEach((npc) => updateNpc(npc, delta, time));
+    updateTraffic(delta);
 
     trees.forEach((t) => {
       if (t.shakeTimer > 0) {
