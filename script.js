@@ -278,6 +278,114 @@ for (let i = 0; i < 6; i++) {
   clouds.push(cloud);
 }
 
+// ---------- ひると よる ----------
+const DAY_CYCLE_SECONDS = 180;
+const NIGHT_SKY_COLOR = new THREE.Color(0x0c1436);
+const DAY_SKY_COLOR = new THREE.Color(SKY_COLOR);
+const tmpSkyColor = new THREE.Color(SKY_COLOR);
+scene.background = tmpSkyColor;
+
+const STAR_COUNT = 160;
+const starGeometry = new THREE.BufferGeometry();
+const starPositions = new Float32Array(STAR_COUNT * 3);
+for (let i = 0; i < STAR_COUNT; i++) {
+  const angle = Math.random() * Math.PI * 2;
+  const radius = 60 + Math.random() * 45;
+  starPositions[i * 3] = Math.cos(angle) * radius;
+  starPositions[i * 3 + 1] = 26 + Math.random() * 44;
+  starPositions[i * 3 + 2] = Math.sin(angle) * radius;
+}
+starGeometry.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
+const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.6, transparent: true, opacity: 0 });
+const stars = new THREE.Points(starGeometry, starMaterial);
+skyGroup.add(stars);
+
+function updateDayNight(time) {
+  const dayPhase = (time % DAY_CYCLE_SECONDS) / DAY_CYCLE_SECONDS;
+  const theta = dayPhase * Math.PI * 2;
+  const brightness = (Math.sin(theta) + 1) / 2; // 0(よる) ～ 1(ひる)
+  tmpSkyColor.copy(NIGHT_SKY_COLOR).lerp(DAY_SKY_COLOR, brightness);
+  scene.fog.color.copy(tmpSkyColor);
+  ambientLight.intensity = 0.25 + brightness * 0.45;
+  sunLight.intensity = 0.08 + brightness * 0.8;
+  sun.material.color.set(brightness > 0.35 ? 0xfff2a8 : 0xe8eef5);
+  stars.material.opacity = Math.max(0, 0.9 - brightness * 1.8);
+  return brightness;
+}
+
+// ---------- てんき（はれ・あめ・ゆき） ----------
+let weather = "clear";
+let weatherTimer = 40 + Math.random() * 30;
+const WEATHER_MESSAGES = {
+  clear: "☀️ はれてきたよ",
+  rain: "☔ あめが ふってきたよ",
+  snow: "❄️ ゆきが ふってきたよ",
+};
+
+function makeWeatherPoints(count, color, size) {
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = (Math.random() * 2 - 1) * 30;
+    positions[i * 3 + 1] = Math.random() * 24;
+    positions[i * 3 + 2] = (Math.random() * 2 - 1) * 30;
+  }
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.PointsMaterial({ color, size, transparent: true, opacity: 0 });
+  const points = new THREE.Points(geometry, material);
+  scene.add(points);
+  return points;
+}
+const RAIN_COUNT = 260;
+const rainPoints = makeWeatherPoints(RAIN_COUNT, 0xaec9f2, 0.15);
+const SNOW_COUNT = 200;
+const snowPoints = makeWeatherPoints(SNOW_COUNT, 0xffffff, 0.3);
+
+function pickNextWeather() {
+  const r = Math.random();
+  if (r < 0.55) return "clear";
+  if (r < 0.8) return "rain";
+  return "snow";
+}
+
+function setWeather(next) {
+  if (next === weather) return;
+  weather = next;
+  showMessage(WEATHER_MESSAGES[weather]);
+  playTone(weather === "clear" ? 660 : 420, 0.12);
+}
+
+function updateWeather(delta, centerX, centerZ) {
+  weatherTimer -= delta;
+  if (weatherTimer <= 0) {
+    weatherTimer = 50 + Math.random() * 40;
+    setWeather(pickNextWeather());
+  }
+  rainPoints.material.opacity = THREE.MathUtils.lerp(rainPoints.material.opacity, weather === "rain" ? 0.7 : 0, delta * 3);
+  snowPoints.material.opacity = THREE.MathUtils.lerp(snowPoints.material.opacity, weather === "snow" ? 0.85 : 0, delta * 3);
+
+  if (rainPoints.material.opacity > 0.02) {
+    const pos = rainPoints.geometry.attributes.position;
+    for (let i = 0; i < RAIN_COUNT; i++) {
+      let y = pos.getY(i) - delta * 22;
+      if (y < 0) y = 20 + Math.random() * 6;
+      pos.setY(i, y);
+    }
+    pos.needsUpdate = true;
+  }
+  if (snowPoints.material.opacity > 0.02) {
+    const pos = snowPoints.geometry.attributes.position;
+    for (let i = 0; i < SNOW_COUNT; i++) {
+      let y = pos.getY(i) - delta * 3;
+      if (y < 0) y = 20 + Math.random() * 6;
+      pos.setY(i, y);
+    }
+    pos.needsUpdate = true;
+  }
+  rainPoints.position.set(centerX, 0, centerZ);
+  snowPoints.position.set(centerX, 0, centerZ);
+}
+
 // ==========================================================
 // フィールド（まち）の きほん サイズ
 // ==========================================================
@@ -2417,6 +2525,9 @@ function animate() {
 
     npcs.forEach((npc) => updateNpc(npc, delta, time));
     updateTraffic(delta);
+    updateDayNight(time);
+    const activePos = drivingCar || player;
+    updateWeather(delta, activePos.x, activePos.z);
 
     trees.forEach((t) => {
       if (t.shakeTimer > 0) {
