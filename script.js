@@ -24,6 +24,7 @@ let state = {
   inventory: { red: 0, gray: 0, blue: 0, yellow: 0, green: 0, purple: 0 },
   totalCollected: 0,
   grid: makeEmptyGrid(14, 10), // build画面のマス目（null か いろkey）
+  houses: [], // まちに たてた いえ {x, y, wallHex, roofHex, doorHex}
   soundOn: true,
 };
 
@@ -92,6 +93,7 @@ const screens = {
   title: document.getElementById("title-screen"),
   collect: document.getElementById("collect-screen"),
   build: document.getElementById("build-screen"),
+  inside: document.getElementById("inside-screen"),
 };
 
 function showScreen(name) {
@@ -125,6 +127,17 @@ soundBtn.addEventListener("click", () => {
   soundBtn.textContent = state.soundOn ? "🔊" : "🔇";
   saveState();
 });
+
+// ---------- あつめる がめんの メッセージ ----------
+let collectMessageTimer = null;
+function showCollectMessage(msg) {
+  const el = document.getElementById("collect-message");
+  el.textContent = msg;
+  clearTimeout(collectMessageTimer);
+  collectMessageTimer = setTimeout(() => {
+    el.textContent = "";
+  }, 2500);
+}
 
 // ==========================================================
 // インベントリ（もっている ブロック）の ひょうじ
@@ -161,11 +174,42 @@ const player = {
   size: 28,
   speed: 3.2,
 };
+let walkPhase = 0;
+let facing = "down";
 
 const keys = { up: false, down: false, left: false, right: false };
 
 const fieldBlocks = []; // {x, y, size, colorKey}
 const MAX_FIELD_BLOCKS = 12;
+
+// ---------- まちの みちと きの いち（かざり） ----------
+const ROADS = [
+  { x: 288, y: 0, w: 64, h: CANVAS_H }, // たてのメインどおり
+  { x: 40, y: 78, w: 560, h: 34 }, // うえの よこどおり
+  { x: 40, y: 328, w: 560, h: 34 }, // したの よこどおり
+];
+const TREES = [
+  { x: 170, y: 195 },
+  { x: 470, y: 195 },
+  { x: 170, y: 290 },
+  { x: 470, y: 290 },
+];
+
+// ---------- いえを たてられる ばしょ（まちの くかく） ----------
+const HOUSE_PLOTS = [
+  { x: 90, y: 95 },
+  { x: 230, y: 85 },
+  { x: 410, y: 85 },
+  { x: 550, y: 95 },
+  { x: 90, y: 345 },
+  { x: 230, y: 355 },
+  { x: 410, y: 355 },
+  { x: 550, y: 345 },
+];
+const HOUSE_W = 62;
+const HOUSE_BODY_H = 42;
+const HOUSE_ROOF_H = 26;
+let currentHouse = null;
 
 function spawnBlock() {
   if (fieldBlocks.length >= MAX_FIELD_BLOCKS) return;
@@ -178,12 +222,17 @@ function spawnBlock() {
   });
   const colorKey = weighted[Math.floor(Math.random() * weighted.length)];
   const size = 22;
-  fieldBlocks.push({
-    x: Math.random() * (CANVAS_W - size * 2) + size,
-    y: Math.random() * (CANVAS_H - size * 2) + size,
-    size,
-    colorKey,
-  });
+
+  let x, y;
+  for (let tries = 0; tries < 10; tries++) {
+    x = Math.random() * (CANVAS_W - size * 2) + size;
+    y = Math.random() * (CANVAS_H - size * 2) + size;
+    const tooCloseToHouse = state.houses.some((h) => Math.hypot(x - h.x, y - (h.y - HOUSE_BODY_H / 2)) < 55);
+    const tooCloseToTree = TREES.some((t) => Math.hypot(x - t.x, y - t.y) < 34);
+    if (!tooCloseToHouse && !tooCloseToTree) break;
+  }
+
+  fieldBlocks.push({ x, y, size, colorKey });
 }
 
 // さいしょに ブロックを まいておく
@@ -207,6 +256,17 @@ function updatePlayer() {
     // ななめ移動が はやくなりすぎないように
     dx *= 0.7071;
     dy *= 0.7071;
+  }
+  const isMoving = dx !== 0 || dy !== 0;
+  if (isMoving) {
+    walkPhase += 0.25;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      facing = dx < 0 ? "left" : "right";
+    } else if (dy !== 0) {
+      facing = dy < 0 ? "up" : "down";
+    }
+  } else {
+    walkPhase = 0;
   }
   player.x += dx * player.speed;
   player.y += dy * player.speed;
@@ -233,10 +293,8 @@ function checkCollisions() {
   }
 }
 
-function drawField() {
-  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-
-  // しばふの もよう
+function drawTownBackground() {
+  // しばふ
   ctx.fillStyle = "#7bc96f";
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
   ctx.strokeStyle = "rgba(255,255,255,0.15)";
@@ -246,6 +304,198 @@ function drawField() {
     ctx.lineTo(x, CANVAS_H);
     ctx.stroke();
   }
+
+  // みち
+  ROADS.forEach((r) => {
+    ctx.fillStyle = "#d9c9a0";
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = "#c2ae7e";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+  });
+  // まんなかどおりの てんせん
+  ctx.strokeStyle = "#fff4d6";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 10]);
+  ctx.beginPath();
+  ctx.moveTo(CANVAS_W / 2, 0);
+  ctx.lineTo(CANVAS_W / 2, CANVAS_H);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // き
+  TREES.forEach((t) => drawTree(t.x, t.y));
+}
+
+function drawTree(x, y) {
+  ctx.beginPath();
+  ctx.ellipse(x, y + 26, 16, 6, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.fill();
+
+  ctx.fillStyle = "#8a5a2b";
+  roundRect(ctx, x - 4, y + 2, 8, 20, 2);
+  ctx.fill();
+
+  const grad = ctx.createRadialGradient(x - 5, y - 12, 2, x, y - 8, 20);
+  grad.addColorStop(0, "#7fd67f");
+  grad.addColorStop(1, "#3f9142");
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(x, y - 8, 18, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawHouse(h) {
+  const halfW = HOUSE_W / 2;
+
+  // かげ
+  ctx.beginPath();
+  ctx.ellipse(h.x, h.y + 4, halfW * 0.9, 8, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.fill();
+
+  // かべ
+  const wallGrad = ctx.createLinearGradient(h.x - halfW, h.y - HOUSE_BODY_H, h.x + halfW, h.y);
+  wallGrad.addColorStop(0, shadeColor(h.wallHex, 22));
+  wallGrad.addColorStop(1, shadeColor(h.wallHex, -18));
+  ctx.fillStyle = wallGrad;
+  roundRect(ctx, h.x - halfW, h.y - HOUSE_BODY_H, HOUSE_W, HOUSE_BODY_H, 4);
+  ctx.fill();
+  ctx.strokeStyle = shadeColor(h.wallHex, -35);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // やね
+  const roofGrad = ctx.createLinearGradient(h.x, h.y - HOUSE_BODY_H - HOUSE_ROOF_H, h.x, h.y - HOUSE_BODY_H);
+  roofGrad.addColorStop(0, shadeColor(h.roofHex, 25));
+  roofGrad.addColorStop(1, shadeColor(h.roofHex, -15));
+  ctx.fillStyle = roofGrad;
+  ctx.beginPath();
+  ctx.moveTo(h.x - halfW - 6, h.y - HOUSE_BODY_H);
+  ctx.lineTo(h.x + halfW + 6, h.y - HOUSE_BODY_H);
+  ctx.lineTo(h.x, h.y - HOUSE_BODY_H - HOUSE_ROOF_H);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = shadeColor(h.roofHex, -35);
+  ctx.stroke();
+
+  // まど
+  ctx.fillStyle = "#eaf6ff";
+  [-1, 1].forEach((side) => {
+    const wx = h.x + side * (halfW * 0.55) - 6;
+    roundRect(ctx, wx, h.y - HOUSE_BODY_H + 8, 12, 12, 2);
+    ctx.fill();
+  });
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.lineWidth = 1;
+  [-1, 1].forEach((side) => {
+    const wx = h.x + side * (halfW * 0.55) - 6;
+    ctx.strokeRect(wx, h.y - HOUSE_BODY_H + 8, 12, 12);
+  });
+
+  // ドア
+  const doorGrad = ctx.createLinearGradient(h.x - 8, h.y - 20, h.x + 8, h.y);
+  doorGrad.addColorStop(0, shadeColor(h.doorHex, 20));
+  doorGrad.addColorStop(1, shadeColor(h.doorHex, -20));
+  ctx.fillStyle = doorGrad;
+  roundRect(ctx, h.x - 8, h.y - 20, 16, 20, 3);
+  ctx.fill();
+  ctx.fillStyle = "#fff2c2";
+  ctx.beginPath();
+  ctx.arc(h.x + 4, h.y - 9, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawPerson(x, y, size) {
+  const bob = Math.sin(walkPhase) * 2.4;
+  const legSwing = Math.sin(walkPhase) * 5;
+
+  // じめんの かげ
+  ctx.beginPath();
+  ctx.ellipse(x, y + size * 0.62, size * 0.42, size * 0.14, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.fill();
+
+  const headR = size * 0.28;
+  const bodyTop = y - size * 0.18 + bob * 0.3;
+  const bodyH = size * 0.5;
+  const bodyW = size * 0.5;
+  const headY = bodyTop - headR * 0.9;
+
+  // あし
+  ctx.strokeStyle = "#3a4a63";
+  ctx.lineCap = "round";
+  ctx.lineWidth = size * 0.16;
+  ctx.beginPath();
+  ctx.moveTo(x - size * 0.12, bodyTop + bodyH);
+  ctx.lineTo(x - size * 0.12 + legSwing * 0.4, bodyTop + bodyH + size * 0.28);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x + size * 0.12, bodyTop + bodyH);
+  ctx.lineTo(x + size * 0.12 - legSwing * 0.4, bodyTop + bodyH + size * 0.28);
+  ctx.stroke();
+
+  // うで
+  ctx.strokeStyle = "#ffd9a8";
+  ctx.lineWidth = size * 0.14;
+  ctx.beginPath();
+  ctx.moveTo(x - bodyW / 2, bodyTop + size * 0.08);
+  ctx.lineTo(x - bodyW / 2 - legSwing * 0.3, bodyTop + size * 0.32);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x + bodyW / 2, bodyTop + size * 0.08);
+  ctx.lineTo(x + bodyW / 2 + legSwing * 0.3, bodyTop + size * 0.32);
+  ctx.stroke();
+
+  // からだ（シャツ）
+  const shirtGrad = ctx.createLinearGradient(x - bodyW / 2, bodyTop, x + bodyW / 2, bodyTop + bodyH);
+  shirtGrad.addColorStop(0, "#5cc4f2");
+  shirtGrad.addColorStop(1, "#2f8fce");
+  ctx.fillStyle = shirtGrad;
+  roundRect(ctx, x - bodyW / 2, bodyTop, bodyW, bodyH, size * 0.16);
+  ctx.fill();
+  ctx.strokeStyle = "#1f6a9c";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // あたま
+  const headGrad = ctx.createRadialGradient(x - headR * 0.3, headY - headR * 0.3, 1, x, headY, headR);
+  headGrad.addColorStop(0, "#ffe9c9");
+  headGrad.addColorStop(1, "#f4c98f");
+  ctx.fillStyle = headGrad;
+  ctx.beginPath();
+  ctx.arc(x, headY, headR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#d9a45f";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // かみのけ
+  ctx.fillStyle = "#5b3a29";
+  ctx.beginPath();
+  ctx.arc(x, headY - headR * 0.15, headR * 1.02, Math.PI, 0);
+  ctx.fill();
+
+  const faceShift = facing === "left" ? -2 : facing === "right" ? 2 : 0;
+  // め
+  ctx.fillStyle = "#333";
+  ctx.beginPath();
+  ctx.arc(x - 4 + faceShift, headY, 1.8, 0, Math.PI * 2);
+  ctx.arc(x + 4 + faceShift, headY, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  // くち
+  ctx.beginPath();
+  ctx.arc(x + faceShift, headY + 4, 3, 0, Math.PI);
+  ctx.stroke();
+}
+
+function drawField() {
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+  drawTownBackground();
+
+  state.houses.forEach((h) => drawHouse(h));
 
   // ブロック（レゴふう：たちたい かんじの しかく＋うえに ポッチ）
   fieldBlocks.forEach((b) => {
@@ -277,38 +527,8 @@ function drawField() {
     ctx.fill();
   });
 
-  // プレイヤーの かげ
-  ctx.beginPath();
-  ctx.ellipse(player.x, player.y + player.size / 2 + 3, player.size * 0.5, player.size * 0.2, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(0,0,0,0.22)";
-  ctx.fill();
-
-  // プレイヤー（かおつき、つやを つけて まるみを だす）
-  roundRect(ctx, player.x - player.size / 2, player.y - player.size / 2, player.size, player.size, 8);
-  const playerGrad = ctx.createLinearGradient(
-    player.x - player.size / 2,
-    player.y - player.size / 2,
-    player.x + player.size / 2,
-    player.y + player.size / 2
-  );
-  playerGrad.addColorStop(0, "#ffe9b8");
-  playerGrad.addColorStop(0.5, "#ffd166");
-  playerGrad.addColorStop(1, "#dd9c1f");
-  ctx.fillStyle = playerGrad;
-  ctx.fill();
-  ctx.strokeStyle = "#c98a1e";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  // め
-  ctx.fillStyle = "#333";
-  ctx.beginPath();
-  ctx.arc(player.x - 5, player.y - 3, 2, 0, Math.PI * 2);
-  ctx.arc(player.x + 5, player.y - 3, 2, 0, Math.PI * 2);
-  ctx.fill();
-  // くち
-  ctx.beginPath();
-  ctx.arc(player.x, player.y + 3, 4, 0, Math.PI);
-  ctx.stroke();
+  // プレイヤー（人がた）
+  drawPerson(player.x, player.y, player.size * 1.7);
 }
 
 function roundRect(context, x, y, w, h, r) {
@@ -329,9 +549,42 @@ function gameLoop() {
   }
   updatePlayer();
   checkCollisions();
+  checkHouseDoors();
   drawField();
   requestAnimationFrame(gameLoop);
 }
+
+// ---------- いえの ドアに ふれたら なかに はいる ----------
+function checkHouseDoors() {
+  for (const h of state.houses) {
+    const doorX = h.x;
+    const doorY = h.y - 8;
+    const dist = Math.hypot(player.x - doorX, player.y - doorY);
+    if (dist < player.size / 2 + 12) {
+      enterHouse(h);
+      return;
+    }
+  }
+}
+
+function enterHouse(house) {
+  currentHouse = house;
+  const room = document.querySelector("#inside-screen .room");
+  room.style.setProperty("--wall-color", shadeColor(house.wallHex, 55));
+  playTone(600, 0.15);
+  showScreen("inside");
+}
+
+function exitHouse() {
+  if (currentHouse) {
+    player.x = Math.max(player.size / 2, Math.min(CANVAS_W - player.size / 2, currentHouse.x));
+    player.y = Math.min(CANVAS_H - player.size / 2, currentHouse.y + 40);
+  }
+  currentHouse = null;
+  showScreen("collect");
+}
+
+document.getElementById("exit-house-btn").addEventListener("click", exitHouse);
 
 function resumeCollectLoop() {
   if (!loopRunning) {
@@ -483,62 +736,44 @@ function showBuildMessage(msg) {
   }, 2500);
 }
 
-// ---------- いえを たてる（プリセット） ----------
-document.getElementById("house-btn").addEventListener("click", () => {
-  buildHouse();
+// ---------- まちに いえを たてる ----------
+document.getElementById("build-house-btn").addEventListener("click", () => {
+  buildHouseOnField();
 });
 
-function buildHouse() {
-  // ひつような ブロックが たりているか チェック
+function findEmptyPlot() {
+  return HOUSE_PLOTS.find((plot) => !state.houses.some((h) => h.x === plot.x && h.y === plot.y));
+}
+
+function buildHouseOnField() {
   for (const key in HOUSE_RECIPE) {
     if (state.inventory[key] < HOUSE_RECIPE[key]) {
       const c = COLORS.find((x) => x.key === key);
-      showBuildMessage(`「${c.name}」の ブロックが あと ${HOUSE_RECIPE[key] - state.inventory[key]}こ たりないよ`);
+      showCollectMessage(`「${c.name}」の ブロックが あと ${HOUSE_RECIPE[key] - state.inventory[key]}こ たりないよ`);
       return;
     }
   }
 
-  // グリッドの あいている 3x3の ばしょを さがす
-  const spot = findEmptySpot(3, 3);
-  if (!spot) {
-    showBuildMessage("まちに あきスペースが ないよ。ブロックを けしてから ためしてね");
+  const plot = findEmptyPlot();
+  if (!plot) {
+    showCollectMessage("まちに もう あきちが ないよ！");
     return;
   }
 
-  const pattern = [
-    ["gray", "gray", "gray"],
-    ["red", "blue", "red"],
-    ["red", "red", "red"],
-  ];
-
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 3; c++) {
-      state.grid[spot.row + r][spot.col + c] = pattern[r][c];
-    }
-  }
+  state.houses.push({
+    x: plot.x,
+    y: plot.y,
+    wallHex: colorHex("red"),
+    roofHex: colorHex("gray"),
+    doorHex: colorHex("blue"),
+  });
   for (const key in HOUSE_RECIPE) {
     state.inventory[key] -= HOUSE_RECIPE[key];
   }
   playTone(900, 0.2);
-  showBuildMessage("🏠 いえが たった！すごいね！");
+  showCollectMessage("🏠 まちに いえが たった！ドアから 入れるよ");
   renderInventory();
-  renderBuildGrid();
   saveState();
-}
-
-function findEmptySpot(w, h) {
-  for (let r = 0; r <= GRID_ROWS - h; r++) {
-    for (let c = 0; c <= GRID_COLS - w; c++) {
-      let ok = true;
-      for (let rr = 0; rr < h && ok; rr++) {
-        for (let cc = 0; cc < w && ok; cc++) {
-          if (state.grid[r + rr][c + cc]) ok = false;
-        }
-      }
-      if (ok) return { row: r, col: c };
-    }
-  }
-  return null;
 }
 
 // ---------- ぜんぶ けす ----------

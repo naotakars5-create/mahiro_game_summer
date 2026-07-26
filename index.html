@@ -17,8 +17,9 @@
       <h2>あそびかた</h2>
       <ol>
         <li>やじるしキー（or したの ボタン）で うごく</li>
-        <li>フィールドの ブロックに ふれると あつまるよ</li>
-        <li>「つくる」がめんで まちを つくろう！</li>
+        <li>まちの ブロックに ふれると あつまるよ</li>
+        <li>「いえを たてる」で まちに いえが たつよ</li>
+        <li>いえの ドアに ちかづくと、なかに 入れるよ！</li>
       </ol>
     </div>
   </div>
@@ -29,9 +30,11 @@
       <div id="inventory" class="inventory"></div>
       <div class="topbar-buttons">
         <button id="sound-btn" class="mini-btn">🔊</button>
-        <button id="to-build-btn" class="mini-btn">つくる ▶</button>
+        <button id="build-house-btn" class="mini-btn">🏠 いえを たてる</button>
+        <button id="to-build-btn" class="mini-btn">もよう ▶</button>
       </div>
     </div>
+    <div id="collect-message"></div>
     <div class="canvas-stage">
       <canvas id="game-canvas" width="640" height="420"></canvas>
     </div>
@@ -61,9 +64,26 @@
         <div id="color-palette"></div>
         <button id="eraser-btn" class="mini-btn">🧹 けす</button>
         <hr>
-        <button id="house-btn" class="big-btn small">🏠 いえを たてる</button>
         <button id="clear-btn" class="mini-btn danger">ぜんぶ けす</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ====== いえの なか がめん ====== -->
+  <div id="inside-screen" class="screen hidden">
+    <div class="topbar">
+      <div class="topbar-buttons">
+        <button id="exit-house-btn" class="mini-btn">◀ そとに でる</button>
+      </div>
+    </div>
+    <div class="room">
+      <div class="room-floor"></div>
+      <div class="room-rug"></div>
+      <div class="room-bed"><div class="pillow"></div></div>
+      <div class="room-table"></div>
+      <div class="room-plant">🪴</div>
+      <div class="room-window">☁️</div>
+      <div class="room-wall-deco">🖼️</div>
     </div>
   </div>
 

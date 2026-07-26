@@ -148,6 +148,13 @@ body {
 }
 
 /* ---------- あつめる画面 ---------- */
+#collect-message {
+  min-height: 1.6em;
+  font-weight: bold;
+  color: #d63031;
+  margin: 4px 0;
+}
+
 .canvas-stage {
   perspective: 1000px;
   padding: 10px 0 26px;
@@ -339,6 +346,130 @@ hr {
   border: none;
   border-top: 2px dashed #ccc;
   margin: 10px 0;
+}
+
+/* ---------- いえの なか ---------- */
+.room {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  aspect-ratio: 640 / 420;
+  margin: 12px auto 0;
+  border-radius: 14px;
+  border: 4px solid #4b7f2d;
+  overflow: hidden;
+  background: var(--wall-color, #f6e3c6);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
+}
+
+.room-floor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 36%;
+  background: repeating-linear-gradient(90deg, #b5834f 0 34px, #a4753f 34px 37px);
+  box-shadow: inset 0 8px 14px rgba(0, 0, 0, 0.3);
+}
+
+.room-window {
+  position: absolute;
+  top: 8%;
+  right: 10%;
+  width: 22%;
+  height: 30%;
+  background: linear-gradient(to bottom, #8ed1fc, #d8f2ff);
+  border: 6px solid #fff8ec;
+  border-radius: 8px;
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2), inset 0 0 0 2px #cbb994;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  font-size: 1.6em;
+  padding-top: 4%;
+}
+
+.room-window::before,
+.room-window::after {
+  content: "";
+  position: absolute;
+  background: #fff8ec;
+}
+
+.room-window::before {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 6%;
+  transform: translateX(-50%);
+}
+
+.room-window::after {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 6%;
+  transform: translateY(-50%);
+}
+
+.room-wall-deco {
+  position: absolute;
+  top: 10%;
+  left: 8%;
+  font-size: clamp(1.4em, 4vw, 2em);
+}
+
+.room-plant {
+  position: absolute;
+  right: 6%;
+  bottom: 9%;
+  font-size: clamp(1.8em, 5vw, 2.6em);
+}
+
+.room-rug {
+  position: absolute;
+  left: 50%;
+  bottom: 6%;
+  width: 34%;
+  height: 13%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, #ff9f9f 0%, #e06666 75%);
+  border-radius: 50%;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.room-bed {
+  position: absolute;
+  left: 6%;
+  bottom: 7%;
+  width: 26%;
+  height: 24%;
+  background: linear-gradient(180deg, #86bbe8, #5a92c9);
+  border-radius: 10px 10px 4px 4px;
+  box-shadow: 0 8px 10px rgba(0, 0, 0, 0.3);
+}
+
+.room-bed .pillow {
+  position: absolute;
+  top: -12%;
+  left: 8%;
+  width: 40%;
+  height: 42%;
+  background: #fffdf5;
+  border-radius: 8px;
+  box-shadow: 0 3px 5px rgba(0, 0, 0, 0.2);
+}
+
+.room-table {
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  width: 15%;
+  height: 11%;
+  transform: translateX(-50%);
+  background: #a4753f;
+  border-radius: 4px;
+  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
 }
 
 @media (max-width: 480px) {
