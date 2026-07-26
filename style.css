@@ -1,5 +1,5 @@
 /* ==========================================================
-   レゴあつめ＆まちづくりゲーム - スタイル
+   レゴあつめ＆まちづくりゲーム 3D - スタイル
    小学生にも見やすいように、大きめ・カラフルにしています
    ========================================================== */
 
@@ -25,7 +25,7 @@ body {
 
 .screen {
   width: 100%;
-  max-width: 700px;
+  max-width: 960px;
   margin: 0 auto;
   text-align: center;
 }
@@ -61,13 +61,6 @@ body {
   box-shadow: 0 2px 0 #b33914;
 }
 
-.big-btn.small {
-  font-size: 1.1em;
-  padding: 10px 18px;
-  box-shadow: 0 4px 0 #b33914;
-  width: 100%;
-}
-
 .howto {
   background: rgba(255, 255, 255, 0.85);
   border-radius: 16px;
@@ -96,6 +89,7 @@ body {
 
 .topbar-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -109,6 +103,7 @@ body {
   font-weight: bold;
   box-shadow: 0 3px 0 #2d7dc9;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .mini-btn:active {
@@ -147,8 +142,8 @@ body {
   border: 2px solid rgba(0,0,0,0.25);
 }
 
-/* ---------- あつめる画面 ---------- */
-#collect-message {
+/* ---------- ゲームがめん（3Dワールド） ---------- */
+#game-message {
   min-height: 1.6em;
   font-weight: bold;
   color: #d63031;
@@ -156,21 +151,20 @@ body {
 }
 
 .canvas-stage {
-  perspective: 1000px;
-  padding: 10px 0 26px;
+  padding: 6px 0 16px;
 }
 
 #game-canvas {
-  background: #7bc96f;
+  background: #8ed1fc;
   border-radius: 14px;
   border: 4px solid #4b7f2d;
   width: 100%;
-  max-width: 640px;
+  max-width: 900px;
+  aspect-ratio: 16 / 9;
   touch-action: none;
   display: block;
   margin: 0 auto;
-  transform: rotateX(18deg);
-  box-shadow: 0 26px 24px -16px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 16px 20px -10px rgba(0, 0, 0, 0.4);
 }
 
 #touch-controls {
@@ -202,281 +196,8 @@ body {
   box-shadow: none;
 }
 
-/* ---------- つくる画面 ---------- */
-#build-message {
-  min-height: 1.6em;
-  font-weight: bold;
-  color: #d63031;
-  margin: 4px 0;
-}
-
-.build-area {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  justify-content: center;
-  flex-wrap: wrap;
-  perspective: 1400px;
-  padding-bottom: 24px;
-}
-
-#build-grid {
-  display: grid;
-  grid-template-columns: repeat(14, 1fr);
-  grid-template-rows: repeat(10, 1fr);
-  gap: 2px;
-  background: #5b3a29;
-  border: 4px solid #3e2723;
-  border-radius: 10px;
-  padding: 4px;
-  width: 100%;
-  max-width: 560px;
-  aspect-ratio: 14 / 10;
-  transform: rotateX(20deg);
-  transform-origin: center top;
-  box-shadow: 0 34px 26px -18px rgba(0, 0, 0, 0.5);
-}
-
-.cell {
-  position: relative;
-  background: #d8c9a3;
-  border-radius: 3px;
-  cursor: pointer;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.25),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.25);
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
-}
-
-.cell:hover {
-  filter: brightness(1.08);
-}
-
-.cell.filled {
-  background: linear-gradient(155deg, var(--brick-light) 0%, var(--brick-color) 45%, var(--brick-dark) 100%);
-  box-shadow:
-    inset 0 2px 2px rgba(255, 255, 255, 0.55),
-    0 3px 0 var(--brick-dark),
-    0 6px 6px rgba(0, 0, 0, 0.35);
-  transform: translateY(-3px);
-}
-
-.cell.filled:active {
-  transform: translateY(0);
-  box-shadow:
-    inset 0 2px 2px rgba(255, 255, 255, 0.4),
-    0 1px 0 var(--brick-dark);
-}
-
-.cell.filled::after {
-  content: "";
-  position: absolute;
-  top: 12%;
-  left: 50%;
-  width: 34%;
-  height: 34%;
-  border-radius: 50%;
-  transform: translateX(-50%);
-  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.9), var(--brick-color) 55%, var(--brick-dark) 100%);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-.palette-panel {
-  background: rgba(255,255,255,0.9);
-  border-radius: 14px;
-  padding: 12px;
-  width: 160px;
-  min-width: 140px;
-}
-
-.panel-title {
-  font-weight: bold;
-  margin: 4px 0;
-}
-
-#color-palette {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.color-swatch-btn {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: 3px solid transparent;
-  cursor: pointer;
-  box-shadow:
-    inset 0 2px 2px rgba(255, 255, 255, 0.55),
-    0 3px 0 var(--brick-dark, rgba(0, 0, 0, 0.3)),
-    0 5px 4px rgba(0, 0, 0, 0.3);
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
-}
-
-.color-swatch-btn::after {
-  content: "";
-  position: absolute;
-  top: 18%;
-  left: 50%;
-  width: 34%;
-  height: 34%;
-  border-radius: 50%;
-  transform: translateX(-50%);
-  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.05));
-}
-
-.color-swatch-btn:active {
-  transform: translateY(2px);
-  box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.4);
-}
-
-.color-swatch-btn.selected {
-  border-color: #333;
-  transform: translateY(1px) scale(1.06);
-}
-
-.palette-panel .mini-btn {
-  width: 100%;
-  margin-bottom: 8px;
-}
-
-hr {
-  border: none;
-  border-top: 2px dashed #ccc;
-  margin: 10px 0;
-}
-
-/* ---------- いえの なか ---------- */
-.room {
-  position: relative;
-  width: 100%;
-  max-width: 640px;
-  aspect-ratio: 640 / 420;
-  margin: 12px auto 0;
-  border-radius: 14px;
-  border: 4px solid #4b7f2d;
-  overflow: hidden;
-  background: var(--wall-color, #f6e3c6);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
-}
-
-.room-floor {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 36%;
-  background: repeating-linear-gradient(90deg, #b5834f 0 34px, #a4753f 34px 37px);
-  box-shadow: inset 0 8px 14px rgba(0, 0, 0, 0.3);
-}
-
-.room-window {
-  position: absolute;
-  top: 8%;
-  right: 10%;
-  width: 22%;
-  height: 30%;
-  background: linear-gradient(to bottom, #8ed1fc, #d8f2ff);
-  border: 6px solid #fff8ec;
-  border-radius: 8px;
-  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2), inset 0 0 0 2px #cbb994;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  font-size: 1.6em;
-  padding-top: 4%;
-}
-
-.room-window::before,
-.room-window::after {
-  content: "";
-  position: absolute;
-  background: #fff8ec;
-}
-
-.room-window::before {
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 6%;
-  transform: translateX(-50%);
-}
-
-.room-window::after {
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 6%;
-  transform: translateY(-50%);
-}
-
-.room-wall-deco {
-  position: absolute;
-  top: 10%;
-  left: 8%;
-  font-size: clamp(1.4em, 4vw, 2em);
-}
-
-.room-plant {
-  position: absolute;
-  right: 6%;
-  bottom: 9%;
-  font-size: clamp(1.8em, 5vw, 2.6em);
-}
-
-.room-rug {
-  position: absolute;
-  left: 50%;
-  bottom: 6%;
-  width: 34%;
-  height: 13%;
-  transform: translateX(-50%);
-  background: radial-gradient(ellipse at center, #ff9f9f 0%, #e06666 75%);
-  border-radius: 50%;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-}
-
-.room-bed {
-  position: absolute;
-  left: 6%;
-  bottom: 7%;
-  width: 26%;
-  height: 24%;
-  background: linear-gradient(180deg, #86bbe8, #5a92c9);
-  border-radius: 10px 10px 4px 4px;
-  box-shadow: 0 8px 10px rgba(0, 0, 0, 0.3);
-}
-
-.room-bed .pillow {
-  position: absolute;
-  top: -12%;
-  left: 8%;
-  width: 40%;
-  height: 42%;
-  background: #fffdf5;
-  border-radius: 8px;
-  box-shadow: 0 3px 5px rgba(0, 0, 0, 0.2);
-}
-
-.room-table {
-  position: absolute;
-  left: 50%;
-  bottom: 7%;
-  width: 15%;
-  height: 11%;
-  transform: translateX(-50%);
-  background: #a4753f;
-  border-radius: 4px;
-  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
-}
-
 @media (max-width: 480px) {
   #title-screen h1 {
     font-size: 1.6em;
-  }
-  .palette-panel {
-    width: 100%;
   }
 }

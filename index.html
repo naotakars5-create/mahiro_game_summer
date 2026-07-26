@@ -3,40 +3,45 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>レゴあつめ＆まちづくりゲーム</title>
+<title>レゴあつめ＆まちづくりゲーム 3D</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <!-- ====== タイトルがめん ====== -->
   <div id="title-screen" class="screen">
-    <h1>🧱 レゴあつめ<br>＆ まちづくり 🏠</h1>
-    <p class="sub">ブロックをあつめて、いえや まちを つくろう！</p>
+    <h1>🧱 レゴあつめ<br>＆ まちづくり 3D 🏙️</h1>
+    <p class="sub">ブロックをあつめて、いえや ビル、おみせ、くるまを つくろう！</p>
     <button id="start-btn" class="big-btn">スタート ▶</button>
     <div class="howto">
       <h2>あそびかた</h2>
       <ol>
         <li>やじるしキー（or したの ボタン）で うごく</li>
         <li>まちの ブロックに ふれると あつまるよ</li>
-        <li>「いえを たてる」で まちに いえが たつよ</li>
-        <li>いえの ドアに ちかづくと、なかに 入れるよ！</li>
+        <li>「いえ」「ビル」「おみせ」ボタンで まちに たてものが たつよ</li>
+        <li>たてもののドアに ちかづくと、なかに 入れるよ</li>
+        <li>「くるま」を つくって ちかづくと のれるよ</li>
       </ol>
     </div>
   </div>
 
-  <!-- ====== あつめるがめん ====== -->
-  <div id="collect-screen" class="screen hidden">
+  <!-- ====== ゲームがめん（まち／たてものの なか） ====== -->
+  <div id="game-screen" class="screen hidden">
     <div class="topbar">
       <div id="inventory" class="inventory"></div>
       <div class="topbar-buttons">
         <button id="sound-btn" class="mini-btn">🔊</button>
-        <button id="build-house-btn" class="mini-btn">🏠 いえを たてる</button>
-        <button id="to-build-btn" class="mini-btn">もよう ▶</button>
+        <button id="build-house-btn" class="mini-btn">🏠 いえ</button>
+        <button id="build-building-btn" class="mini-btn">🏢 ビル</button>
+        <button id="build-shop-btn" class="mini-btn">🏪 おみせ</button>
+        <button id="build-car-btn" class="mini-btn">🚗 くるま</button>
+        <button id="exit-house-btn" class="mini-btn hidden">◀ そとに でる</button>
+        <button id="exit-car-btn" class="mini-btn hidden">🚪 くるまを おりる</button>
       </div>
     </div>
-    <div id="collect-message"></div>
+    <div id="game-message"></div>
     <div class="canvas-stage">
-      <canvas id="game-canvas" width="640" height="420"></canvas>
+      <canvas id="game-canvas"></canvas>
     </div>
     <div id="touch-controls">
       <button id="btn-up" class="dpad">⬆</button>
@@ -48,45 +53,7 @@
     </div>
   </div>
 
-  <!-- ====== つくるがめん ====== -->
-  <div id="build-screen" class="screen hidden">
-    <div class="topbar">
-      <div id="inventory-build" class="inventory"></div>
-      <div class="topbar-buttons">
-        <button id="to-collect-btn" class="mini-btn">◀ あつめる</button>
-      </div>
-    </div>
-    <div id="build-message"></div>
-    <div class="build-area">
-      <div id="build-grid"></div>
-      <div class="palette-panel">
-        <p class="panel-title">いろを えらぶ</p>
-        <div id="color-palette"></div>
-        <button id="eraser-btn" class="mini-btn">🧹 けす</button>
-        <hr>
-        <button id="clear-btn" class="mini-btn danger">ぜんぶ けす</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ====== いえの なか がめん ====== -->
-  <div id="inside-screen" class="screen hidden">
-    <div class="topbar">
-      <div class="topbar-buttons">
-        <button id="exit-house-btn" class="mini-btn">◀ そとに でる</button>
-      </div>
-    </div>
-    <div class="room">
-      <div class="room-floor"></div>
-      <div class="room-rug"></div>
-      <div class="room-bed"><div class="pillow"></div></div>
-      <div class="room-table"></div>
-      <div class="room-plant">🪴</div>
-      <div class="room-window">☁️</div>
-      <div class="room-wall-deco">🖼️</div>
-    </div>
-  </div>
-
+<script src="three.min.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

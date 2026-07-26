@@ -1,10 +1,8 @@
 // ==========================================================
-// レゴあつめ ＆ まちづくりゲーム
-// 小学2年生でもあそべるように、かんたんな そうさにしています
+// レゴあつめ ＆ まちづくり 3D
+// three.js を つかった 本かくの 3D タウンゲーム
 // ==========================================================
 
-// ---------- いろの じょうほう ----------
-// key: いろの ID / name: がめんに でる なまえ / hex: いろ / unlockAt: なんこ あつめたら つかえるか
 const COLORS = [
   { key: "red",    name: "あか",   hex: "#e63946", unlockAt: 0 },
   { key: "gray",   name: "はいいろ", hex: "#8d99ae", unlockAt: 0 },
@@ -14,25 +12,21 @@ const COLORS = [
   { key: "purple", name: "むらさき", hex: "#9d4edd", unlockAt: 30 },
 ];
 
-// いえを たてる のに ひつような ブロック（プリセット）
 const HOUSE_RECIPE = { red: 4, gray: 3, blue: 1 };
+const BUILDING_RECIPE = { gray: 6, blue: 5, yellow: 2 };
+const SHOP_RECIPE = { yellow: 4, red: 3, blue: 2 };
+const CAR_RECIPE = { red: 5, gray: 4, blue: 3 };
 
-const SAVE_KEY = "legoTownSave_v1";
+const SAVE_KEY = "legoTown3dSave_v1";
 
-// ---------- ぜんたいの じょうたい ----------
 let state = {
   inventory: { red: 0, gray: 0, blue: 0, yellow: 0, green: 0, purple: 0 },
   totalCollected: 0,
-  grid: makeEmptyGrid(14, 10), // build画面のマス目（null か いろkey）
-  houses: [], // まちに たてた いえ {x, y, wallHex, roofHex, doorHex}
+  structures: [], // {type:'house'|'building'|'shop', x, z}
+  cars: [], // {x, z}
   soundOn: true,
 };
 
-function makeEmptyGrid(cols, rows) {
-  return Array.from({ length: rows }, () => Array(cols).fill(null));
-}
-
-// ---------- いろを あかるく／くらくする（立体感を だすため） ----------
 function shadeColor(hex, percent) {
   const num = parseInt(hex.replace("#", ""), 16);
   const clamp = (v) => Math.max(0, Math.min(255, v));
@@ -43,12 +37,30 @@ function shadeColor(hex, percent) {
   return "#" + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
 }
 
+function col(hex) {
+  return new THREE.Color(hex);
+}
+
+function colorHex(key) {
+  return COLORS.find((c) => c.key === key).hex;
+}
+
+function unlockedColors() {
+  return COLORS.filter((c) => state.totalCollected >= c.unlockAt);
+}
+
 // ---------- ほぞん／よみこみ ----------
 function saveState() {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    const toSave = {
+      inventory: state.inventory,
+      totalCollected: state.totalCollected,
+      structures: state.structures,
+      cars: state.cars,
+      soundOn: state.soundOn,
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(toSave));
   } catch (e) {
-    // ほぞんできなくても ゲームは つづけられるようにする
     console.warn("ほぞんに しっぱいしました", e);
   }
 }
@@ -65,7 +77,7 @@ function loadState() {
   }
 }
 
-// ---------- おと（かんたんな ビープおん） ----------
+// ---------- おと ----------
 let audioCtx = null;
 function playTone(freq, duration) {
   if (!state.soundOn) return;
@@ -89,61 +101,35 @@ function playTone(freq, duration) {
 // ==========================================================
 // がめんの きりかえ
 // ==========================================================
-const screens = {
-  title: document.getElementById("title-screen"),
-  collect: document.getElementById("collect-screen"),
-  build: document.getElementById("build-screen"),
-  inside: document.getElementById("inside-screen"),
-};
-
-function showScreen(name) {
-  Object.values(screens).forEach((el) => el.classList.add("hidden"));
-  screens[name].classList.remove("hidden");
-  if (name === "collect") {
-    renderInventory();
-    resumeCollectLoop();
-  }
-  if (name === "build") {
-    renderInventory();
-    renderBuildGrid();
-    renderPalette();
-  }
-}
-
-document.getElementById("start-btn").addEventListener("click", () => {
-  showScreen("collect");
-});
-document.getElementById("to-build-btn").addEventListener("click", () => {
-  showScreen("build");
-});
-document.getElementById("to-collect-btn").addEventListener("click", () => {
-  showScreen("collect");
-});
-
-// ---------- サウンド トグル ----------
+const titleScreen = document.getElementById("title-screen");
+const gameScreen = document.getElementById("game-screen");
 const soundBtn = document.getElementById("sound-btn");
-soundBtn.addEventListener("click", () => {
-  state.soundOn = !state.soundOn;
-  soundBtn.textContent = state.soundOn ? "🔊" : "🔇";
-  saveState();
-});
+const exitHouseBtn = document.getElementById("exit-house-btn");
+const exitCarBtn = document.getElementById("exit-car-btn");
+const buildButtons = [
+  document.getElementById("build-house-btn"),
+  document.getElementById("build-building-btn"),
+  document.getElementById("build-shop-btn"),
+  document.getElementById("build-car-btn"),
+];
 
-// ---------- あつめる がめんの メッセージ ----------
-let collectMessageTimer = null;
-function showCollectMessage(msg) {
-  const el = document.getElementById("collect-message");
-  el.textContent = msg;
-  clearTimeout(collectMessageTimer);
-  collectMessageTimer = setTimeout(() => {
-    el.textContent = "";
-  }, 2500);
+let mode = "town"; // 'town' | 'inside'
+
+function updateHud() {
+  const driving = !!drivingCar;
+  buildButtons.forEach((b) => b.classList.toggle("hidden", mode === "inside"));
+  exitHouseBtn.classList.toggle("hidden", mode !== "inside");
+  exitCarBtn.classList.toggle("hidden", mode !== "town" || !driving);
 }
 
-// ==========================================================
-// インベントリ（もっている ブロック）の ひょうじ
-// ==========================================================
-function unlockedColors() {
-  return COLORS.filter((c) => state.totalCollected >= c.unlockAt);
+let messageTimer = null;
+function showMessage(msg) {
+  const el = document.getElementById("game-message");
+  el.textContent = msg;
+  clearTimeout(messageTimer);
+  messageTimer = setTimeout(() => {
+    el.textContent = "";
+  }, 2600);
 }
 
 function renderInventory() {
@@ -157,134 +143,710 @@ function renderInventory() {
     )
     .join("");
   document.getElementById("inventory").innerHTML = html;
-  document.getElementById("inventory-build").innerHTML = html;
+}
+
+soundBtn.addEventListener("click", () => {
+  state.soundOn = !state.soundOn;
+  soundBtn.textContent = state.soundOn ? "🔊" : "🔇";
+  saveState();
+});
+
+// ==========================================================
+// three.js の きほん セットアップ
+// ==========================================================
+const canvas = document.getElementById("game-canvas");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+const scene = new THREE.Scene();
+const SKY_COLOR = 0x8ed1fc;
+scene.background = new THREE.Color(SKY_COLOR);
+scene.fog = new THREE.Fog(SKY_COLOR, 34, 85);
+
+const camera = new THREE.PerspectiveCamera(55, 16 / 9, 0.1, 200);
+
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+scene.add(ambientLight);
+const sunLight = new THREE.DirectionalLight(0xfff4dd, 0.85);
+sunLight.position.set(30, 45, -20);
+scene.add(sunLight);
+
+function resizeRenderer() {
+  const w = canvas.clientWidth || 900;
+  const h = canvas.clientHeight || Math.round((w * 9) / 16);
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resizeRenderer).observe(canvas);
+window.addEventListener("resize", resizeRenderer);
+
+// ---------- そら（たいよう・くも） ----------
+const skyGroup = new THREE.Group();
+scene.add(skyGroup);
+
+const sun = new THREE.Mesh(
+  new THREE.SphereGeometry(3, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0xfff2a8 })
+);
+skyGroup.add(sun);
+
+const clouds = [];
+for (let i = 0; i < 6; i++) {
+  const cloud = new THREE.Group();
+  const puffCount = 2 + Math.floor(Math.random() * 2);
+  for (let p = 0; p < puffCount; p++) {
+    const puff = new THREE.Mesh(
+      new THREE.BoxGeometry(3 + Math.random() * 2, 1, 2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92 })
+    );
+    puff.position.set(p * 2.4 - puffCount, 0, 0);
+    cloud.add(puff);
+  }
+  cloud.userData.baseX = -30 + Math.random() * 60;
+  cloud.userData.baseZ = -30 + Math.random() * 60;
+  cloud.userData.baseY = 16 + Math.random() * 8;
+  cloud.userData.speed = 0.3 + Math.random() * 0.3;
+  cloud.userData.phase = Math.random() * Math.PI * 2;
+  skyGroup.add(cloud);
+  clouds.push(cloud);
 }
 
 // ==========================================================
-// あつめる がめん（キャンバス ゲーム）
+// フィールド（まち）の きほん サイズ
 // ==========================================================
-const canvas = document.getElementById("game-canvas");
-const ctx = canvas.getContext("2d");
-const CANVAS_W = canvas.width;
-const CANVAS_H = canvas.height;
+const FIELD_HALF_X = 34;
+const FIELD_HALF_Z = 30;
+const ROAD_HALF_W = 3.2;
+
+const PLOT_COLS = [-16, 16];
+const PLOT_ROWS = [-22, -11, 0, 11, 22];
+const PLOTS = [];
+PLOT_COLS.forEach((x) => {
+  PLOT_ROWS.forEach((z) => {
+    PLOTS.push({ x, z, doorSign: x < 0 ? 1 : -1 });
+  });
+});
+
+const CAR_SPOTS = [
+  { x: 0, z: -24 },
+  { x: 0, z: -8 },
+  { x: 0, z: 8 },
+  { x: 0, z: 24 },
+];
+
+const townGroup = new THREE.Group();
+scene.add(townGroup);
+
+// ---------- じめん ----------
+const farGround = new THREE.Mesh(
+  new THREE.PlaneGeometry(400, 400),
+  new THREE.MeshLambertMaterial({ color: 0x6fb85f })
+);
+farGround.rotation.x = -Math.PI / 2;
+farGround.position.y = -0.02;
+townGroup.add(farGround);
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(FIELD_HALF_X * 2, FIELD_HALF_Z * 2, 20, 18),
+  new THREE.MeshLambertMaterial({ color: 0x7bc96f })
+);
+ground.rotation.x = -Math.PI / 2;
+townGroup.add(ground);
+
+// うすい グリッドせん（しばふの もよう）
+const gridHelper = new THREE.GridHelper(FIELD_HALF_X * 2, 20, 0xffffff, 0xffffff);
+gridHelper.material.transparent = true;
+gridHelper.material.opacity = 0.12;
+gridHelper.position.y = 0.01;
+townGroup.add(gridHelper);
+
+// ---------- みち ----------
+const roadMat = new THREE.MeshLambertMaterial({ color: 0xd9c9a0 });
+const mainRoad = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF_W * 2, FIELD_HALF_Z * 2), roadMat);
+mainRoad.rotation.x = -Math.PI / 2;
+mainRoad.position.y = 0.015;
+townGroup.add(mainRoad);
+
+for (let i = -1; i <= 1; i += 2) {
+  const line = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.15, 1.4),
+    new THREE.MeshBasicMaterial({ color: 0xfff4d6 })
+  );
+  line.rotation.x = -Math.PI / 2;
+  line.position.set(0, 0.02, 0);
+  // ダッシュせんを くりかえし はいち
+  for (let z = -FIELD_HALF_Z + 1; z < FIELD_HALF_Z; z += 3) {
+    const dash = line.clone();
+    dash.position.z = z;
+    townGroup.add(dash);
+  }
+  break;
+}
+
+// ---------- き ----------
+function isInRoadZone(x) {
+  return Math.abs(x) < ROAD_HALF_W + 2;
+}
+function isInPlotZone(x) {
+  return PLOT_COLS.some((px) => Math.abs(x - px) < 5);
+}
+
+function createTree(x, z) {
+  const group = new THREE.Group();
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.25, 0.3, 1.4, 6),
+    new THREE.MeshLambertMaterial({ color: 0x8a5a2b })
+  );
+  trunk.position.y = 0.7;
+  group.add(trunk);
+  const canopyColors = [0x4caf50, 0x66bb6a, 0x388e3c];
+  for (let i = 0; i < 2; i++) {
+    const canopy = new THREE.Mesh(
+      new THREE.BoxGeometry(1.6 - i * 0.4, 1.1 - i * 0.2, 1.6 - i * 0.4),
+      new THREE.MeshLambertMaterial({ color: canopyColors[i % canopyColors.length] })
+    );
+    canopy.position.y = 1.6 + i * 0.8;
+    group.add(canopy);
+  }
+  group.position.set(x, 0, z);
+  townGroup.add(group);
+}
+
+for (let i = 0; i < 16; i++) {
+  let x, z;
+  let tries = 0;
+  do {
+    x = (Math.random() * 2 - 1) * (FIELD_HALF_X - 3);
+    z = (Math.random() * 2 - 1) * (FIELD_HALF_Z - 3);
+    tries++;
+  } while ((isInRoadZone(x) || isInPlotZone(x)) && tries < 20);
+  if (tries < 20) createTree(x, z);
+}
+
+// ==========================================================
+// キャラクター（マインクラフトふう じんけい）
+// ==========================================================
+function createHumanoid(opts) {
+  const skin = opts.skin || "#f4c98f";
+  const shirt = opts.shirt || "#5cc4f2";
+  const pants = opts.pants || "#3a4a63";
+  const scale = opts.scale || 1;
+
+  const group = new THREE.Group();
+
+  const head = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5, 0.5, 0.5),
+    new THREE.MeshLambertMaterial({ color: col(skin) })
+  );
+  head.position.y = 1.75;
+  group.add(head);
+
+  // め
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x2b2b2b });
+  [-0.12, 0.12].forEach((ex) => {
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.04), eyeMat);
+    eye.position.set(ex, 1.78, 0.26);
+    group.add(eye);
+  });
+
+  const torso = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5, 0.75, 0.3),
+    new THREE.MeshLambertMaterial({ color: col(shirt) })
+  );
+  torso.position.y = 1.125;
+  group.add(torso);
+
+  function makeLimb(color, w, h, d) {
+    const pivot = new THREE.Group();
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color: col(color) }));
+    mesh.position.y = -h / 2;
+    pivot.add(mesh);
+    return pivot;
+  }
+
+  const leftArm = makeLimb(shirt, 0.2, 0.75, 0.2);
+  leftArm.position.set(-0.35, 1.45, 0);
+  group.add(leftArm);
+  const rightArm = makeLimb(shirt, 0.2, 0.75, 0.2);
+  rightArm.position.set(0.35, 1.45, 0);
+  group.add(rightArm);
+
+  const leftLeg = makeLimb(pants, 0.22, 0.75, 0.22);
+  leftLeg.position.set(-0.14, 0.75, 0);
+  group.add(leftLeg);
+  const rightLeg = makeLimb(pants, 0.22, 0.75, 0.22);
+  rightLeg.position.set(0.14, 0.75, 0);
+  group.add(rightLeg);
+
+  group.scale.setScalar(scale);
+
+  return {
+    group,
+    animate(phase, moving) {
+      const swing = moving ? Math.sin(phase) * 0.9 : 0;
+      leftLeg.rotation.x = swing;
+      rightLeg.rotation.x = -swing;
+      leftArm.rotation.x = -swing;
+      rightArm.rotation.x = swing;
+    },
+  };
+}
+
+// ---------- プレイヤー ----------
+const playerRig = createHumanoid({ skin: "#f4c98f", shirt: "#5cc4f2", pants: "#3a4a63", scale: 1 });
+townGroup.add(playerRig.group);
 
 const player = {
-  x: CANVAS_W / 2,
-  y: CANVAS_H / 2,
-  size: 28,
-  speed: 3.2,
+  x: 0,
+  z: 4,
+  facing: 0,
+  speed: 5.5,
 };
-let walkPhase = 0;
-let facing = "down";
 
+let walkPhase = 0;
 const keys = { up: false, down: false, left: false, right: false };
 
-const fieldBlocks = []; // {x, y, size, colorKey}
-const MAX_FIELD_BLOCKS = 12;
+function applyMovement(entityPos, speed, delta, onFacing) {
+  let dx = 0;
+  let dz = 0;
+  if (keys.up) dz -= 1;
+  if (keys.down) dz += 1;
+  if (keys.left) dx -= 1;
+  if (keys.right) dx += 1;
+  const moving = dx !== 0 || dz !== 0;
+  if (moving) {
+    const len = Math.hypot(dx, dz);
+    dx /= len;
+    dz /= len;
+    entityPos.x += dx * speed * delta;
+    entityPos.z += dz * speed * delta;
+    onFacing(Math.atan2(dx, dz));
+  }
+  return moving;
+}
 
-// ---------- まちの みちと きの いち（かざり） ----------
-const ROADS = [
-  { x: 288, y: 0, w: 64, h: CANVAS_H }, // たてのメインどおり
-  { x: 40, y: 78, w: 560, h: 34 }, // うえの よこどおり
-  { x: 40, y: 328, w: 560, h: 34 }, // したの よこどおり
+// ==========================================================
+// たてもの（いえ・ビル・おみせ）
+// ==========================================================
+function makeWindowTexture(rows, cols, wallHex, litHex) {
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 128;
+  const ctx2d = c.getContext("2d");
+  ctx2d.fillStyle = wallHex;
+  ctx2d.fillRect(0, 0, 128, 128);
+  ctx2d.fillStyle = litHex;
+  const cellW = 128 / cols;
+  const cellH = 128 / rows;
+  for (let r = 0; r < rows; r++) {
+    for (let cIdx = 0; cIdx < cols; cIdx++) {
+      const pad = cellW * 0.22;
+      ctx2d.fillRect(cIdx * cellW + pad, r * cellH + pad, cellW - pad * 2, cellH - pad * 2);
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  return tex;
+}
+
+function makeSignTexture(text, bg, fg) {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 96;
+  const ctx2d = c.getContext("2d");
+  ctx2d.fillStyle = bg;
+  ctx2d.fillRect(0, 0, 256, 96);
+  ctx2d.fillStyle = fg;
+  ctx2d.font = "bold 48px sans-serif";
+  ctx2d.textAlign = "center";
+  ctx2d.textBaseline = "middle";
+  ctx2d.fillText(text, 128, 52);
+  return new THREE.CanvasTexture(c);
+}
+
+function addDoorAndWindows(group, halfW, bodyH, doorHex, faceSign) {
+  const doorMat = new THREE.MeshLambertMaterial({ color: col(doorHex) });
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.5), doorMat);
+  door.position.set(0, 0.75, faceSign * (1.51));
+  if (faceSign < 0) door.rotation.y = Math.PI;
+  group.add(door);
+
+  const knobMat = new THREE.MeshBasicMaterial({ color: 0xfff2c2 });
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), knobMat);
+  knob.position.set(0.28, 0.75, faceSign * 1.56);
+  group.add(knob);
+
+  const winMat = new THREE.MeshLambertMaterial({ color: 0xeaf6ff });
+  [-1, 1].forEach((side) => {
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.55), winMat);
+    win.position.set(side * halfW * 0.55, bodyH * 0.7, faceSign * 1.51);
+    if (faceSign < 0) win.rotation.y = Math.PI;
+    group.add(win);
+  });
+
+  return new THREE.Vector3(0, 0, faceSign * 1.6);
+}
+
+const HOUSE_PALETTES = [
+  { wall: "#e63946", roof: "#8d99ae", door: "#48cae4" },
+  { wall: "#f9c74f", roof: "#5b3a29", door: "#e63946" },
+  { wall: "#48cae4", roof: "#3a3a3a", door: "#f9c74f" },
+  { wall: "#9d4edd", roof: "#5b3a29", door: "#f9c74f" },
+  { wall: "#43aa8b", roof: "#8d99ae", door: "#e63946" },
+  { wall: "#f28482", roof: "#5b3a29", door: "#48cae4" },
 ];
-const TREES = [
-  { x: 170, y: 195 },
-  { x: 470, y: 195 },
-  { x: 170, y: 290 },
-  { x: 470, y: 290 },
+const BUILDING_PALETTES = [
+  { wall: "#8d99ae", win: "#48cae4" },
+  { wall: "#adb5bd", win: "#f9c74f" },
+  { wall: "#6c757d", win: "#e63946" },
+  { wall: "#9d8189", win: "#48cae4" },
+];
+const SHOP_PALETTES = [
+  { wall: "#f9c74f", awning: "#e63946", text: "おみせ" },
+  { wall: "#ffb4a2", awning: "#48cae4", text: "パンや" },
+  { wall: "#cdb4db", awning: "#f9c74f", text: "おかしや" },
+  { wall: "#a3d9a5", awning: "#e63946", text: "やおや" },
 ];
 
-// ---------- いえを たてられる ばしょ（まちの くかく） ----------
-const HOUSE_PLOTS = [
-  { x: 90, y: 95 },
-  { x: 230, y: 85 },
-  { x: 410, y: 85 },
-  { x: 550, y: 95 },
-  { x: 90, y: 345 },
-  { x: 230, y: 355 },
-  { x: 410, y: 355 },
-  { x: 550, y: 345 },
-];
-const HOUSE_W = 62;
-const HOUSE_BODY_H = 42;
-const HOUSE_ROOF_H = 26;
-let currentHouse = null;
+function createHouseMesh(palette) {
+  const p = palette || HOUSE_PALETTES[0];
+  const wallHex = p.wall;
+  const roofHex = p.roof;
+  const doorHex = p.door;
+  const group = new THREE.Group();
+
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(3, 2.2, 3),
+    new THREE.MeshLambertMaterial({ color: col(wallHex) })
+  );
+  body.position.y = 1.1;
+  group.add(body);
+
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(2.35, 1.6, 4),
+    new THREE.MeshLambertMaterial({ color: col(roofHex) })
+  );
+  roof.rotation.y = Math.PI / 4;
+  roof.position.y = 2.2 + 0.8;
+  group.add(roof);
+
+  const doorLocal = addDoorAndWindows(group, 1.5, 2.2, doorHex, 1);
+
+  return { group, doorLocal, wallHex, label: "いえ" };
+}
+
+function createBuildingMesh(palette) {
+  const p = palette || BUILDING_PALETTES[0];
+  const wallHex = p.wall;
+  const winHex = p.win;
+  const doorHex = p.win;
+  const group = new THREE.Group();
+
+  const w = 3.4;
+  const h = 6.5;
+  const d = 3;
+  const plainMat = new THREE.MeshLambertMaterial({ color: col(wallHex) });
+  const winTex = makeWindowTexture(5, 3, wallHex, winHex);
+  const winMat = new THREE.MeshLambertMaterial({ map: winTex });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [plainMat, plainMat, plainMat, plainMat, winMat, plainMat]);
+  body.position.y = h / 2;
+  group.add(body);
+
+  const roofCap = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.2, 0.3, d + 0.2),
+    new THREE.MeshLambertMaterial({ color: col(shadeColor(wallHex, -20)) })
+  );
+  roofCap.position.y = h + 0.15;
+  group.add(roofCap);
+
+  const doorLocal = addDoorAndWindows(group, w / 2, h, doorHex, 1);
+
+  return { group, doorLocal, wallHex, label: "ビル" };
+}
+
+function createShopMesh(palette) {
+  const p = palette || SHOP_PALETTES[0];
+  const wallHex = p.wall;
+  const awningHex = p.awning;
+  const doorHex = "#48cae4";
+  const group = new THREE.Group();
+
+  const w = 3.6;
+  const h = 2.3;
+  const d = 3;
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshLambertMaterial({ color: col(wallHex) })
+  );
+  body.position.y = h / 2;
+  group.add(body);
+
+  const awning = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.4, 0.35, 1.1),
+    new THREE.MeshLambertMaterial({ color: col(awningHex) })
+  );
+  awning.position.set(0, h - 0.1, d / 2 + 0.4);
+  group.add(awning);
+
+  const signTex = makeSignTexture(p.text, "#ffffff", awningHex);
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.6, 0.6),
+    new THREE.MeshLambertMaterial({ map: signTex })
+  );
+  sign.position.set(0, h + 0.5, d / 2 + 0.05);
+  group.add(sign);
+
+  const doorLocal = addDoorAndWindows(group, w / 2, h, doorHex, 1);
+
+  return { group, doorLocal, wallHex, label: "おみせ" };
+}
+
+const STRUCTURE_FACTORIES = {
+  house: createHouseMesh,
+  building: createBuildingMesh,
+  shop: createShopMesh,
+};
+const STRUCTURE_PALETTES = {
+  house: HOUSE_PALETTES,
+  building: BUILDING_PALETTES,
+  shop: SHOP_PALETTES,
+};
+const STRUCTURE_RECIPES = {
+  house: HOUSE_RECIPE,
+  building: BUILDING_RECIPE,
+  shop: SHOP_RECIPE,
+};
+
+const placedStructures = []; // {type, x, z, doorWorld, wallHex, paletteIndex}
+
+function pickPaletteIndex(type) {
+  const palettes = STRUCTURE_PALETTES[type];
+  const used = placedStructures.filter((s) => s.type === type).map((s) => s.paletteIndex);
+  const all = palettes.map((_, i) => i);
+  const unused = all.filter((i) => !used.includes(i));
+  const pool = unused.length ? unused : all;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function placeStructureMesh(type, x, z, paletteIndex) {
+  const palettes = STRUCTURE_PALETTES[type];
+  const idx = paletteIndex != null ? paletteIndex : pickPaletteIndex(type);
+  const built = STRUCTURE_FACTORIES[type](palettes[idx]);
+  built.group.position.set(x, 0, z);
+  townGroup.add(built.group);
+  const doorWorld = built.doorLocal.clone().add(new THREE.Vector3(x, 0, z));
+  placedStructures.push({ type, x, z, doorWorld, wallHex: built.wallHex, label: built.label, paletteIndex: idx });
+  return idx;
+}
+
+function findEmptyPlot() {
+  return PLOTS.find((plot) => !placedStructures.some((s) => s.x === plot.x && s.z === plot.z));
+}
+
+function attemptBuild(type, buttonLabel) {
+  const recipe = STRUCTURE_RECIPES[type];
+  for (const key in recipe) {
+    if (state.inventory[key] < recipe[key]) {
+      const c = COLORS.find((x) => x.key === key);
+      showMessage(`「${c.name}」の ブロックが あと ${recipe[key] - state.inventory[key]}こ たりないよ`);
+      return;
+    }
+  }
+  const plot = findEmptyPlot();
+  if (!plot) {
+    showMessage("まちに もう あきちが ないよ！");
+    return;
+  }
+  const paletteIndex = placeStructureMesh(type, plot.x, plot.z);
+  state.structures.push({ type, x: plot.x, z: plot.z, paletteIndex });
+  for (const key in recipe) state.inventory[key] -= recipe[key];
+  playTone(900, 0.2);
+  showMessage(`${buttonLabel} が まちに たった！ドアから 入れるよ`);
+  renderInventory();
+  saveState();
+}
+
+document.getElementById("build-house-btn").addEventListener("click", () => attemptBuild("house", "🏠 いえ"));
+document.getElementById("build-building-btn").addEventListener("click", () => attemptBuild("building", "🏢 ビル"));
+document.getElementById("build-shop-btn").addEventListener("click", () => attemptBuild("shop", "🏪 おみせ"));
+
+// ==========================================================
+// くるま
+// ==========================================================
+function createCarMesh(bodyHex) {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(1.7, 0.6, 3.1),
+    new THREE.MeshLambertMaterial({ color: col(bodyHex) })
+  );
+  body.position.y = 0.55;
+  group.add(body);
+
+  const cabin = new THREE.Mesh(
+    new THREE.BoxGeometry(1.3, 0.5, 1.5),
+    new THREE.MeshLambertMaterial({ color: col("#48cae4") })
+  );
+  cabin.position.set(0, 1.1, -0.25);
+  group.add(cabin);
+
+  const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.26, 14);
+  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+  [
+    [-0.85, -1.0],
+    [0.85, -1.0],
+    [-0.85, 1.0],
+    [0.85, 1.0],
+  ].forEach(([x, z]) => {
+    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(x, 0.35, z);
+    group.add(wheel);
+  });
+
+  return group;
+}
+
+const CAR_COLORS = ["#e63946", "#48cae4", "#f9c74f", "#43aa8b"];
+const placedCars = []; // {x, z, mesh, facing}
+
+function findEmptyCarSpot() {
+  return CAR_SPOTS.find((spot) => !placedCars.some((c) => c.x === spot.x && c.z === spot.z));
+}
+
+function pickCarColor() {
+  const used = placedCars.map((c) => c.colorIndex);
+  const all = CAR_COLORS.map((_, i) => i);
+  const unused = all.filter((i) => !used.includes(i));
+  const pool = unused.length ? unused : all;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function attemptBuildCar() {
+  for (const key in CAR_RECIPE) {
+    if (state.inventory[key] < CAR_RECIPE[key]) {
+      const c = COLORS.find((x) => x.key === key);
+      showMessage(`「${c.name}」の ブロックが あと ${CAR_RECIPE[key] - state.inventory[key]}こ たりないよ`);
+      return;
+    }
+  }
+  const spot = findEmptyCarSpot();
+  if (!spot) {
+    showMessage("もう くるまを おく ばしょが ないよ！");
+    return;
+  }
+  const colorIndex = spawnCar(spot.x, spot.z);
+  state.cars.push({ x: spot.x, z: spot.z, colorIndex });
+  for (const key in CAR_RECIPE) state.inventory[key] -= CAR_RECIPE[key];
+  playTone(500, 0.15);
+  playTone(750, 0.15);
+  showMessage("🚗 くるまが できた！ちかづくと のれるよ");
+  renderInventory();
+  saveState();
+}
+
+function spawnCar(x, z, colorIndex) {
+  const idx = colorIndex != null ? colorIndex : pickCarColor();
+  const mesh = createCarMesh(CAR_COLORS[idx]);
+  mesh.position.set(x, 0, z);
+  townGroup.add(mesh);
+  placedCars.push({ x, z, mesh, facing: 0, colorIndex: idx });
+  return idx;
+}
+
+document.getElementById("build-car-btn").addEventListener("click", attemptBuildCar);
+
+let drivingCar = null;
+
+function boardCar(car) {
+  drivingCar = car;
+  playerRig.group.visible = false;
+  playTone(400, 0.1);
+  updateHud();
+}
+
+function exitCarFn() {
+  if (!drivingCar) return;
+  const car = drivingCar;
+  player.x = car.x - Math.sin(car.facing) * 2.8;
+  player.z = car.z - Math.cos(car.facing) * 2.8;
+  player.x = Math.max(-FIELD_HALF_X + 1, Math.min(FIELD_HALF_X - 1, player.x));
+  player.z = Math.max(-FIELD_HALF_Z + 1, Math.min(FIELD_HALF_Z - 1, player.z));
+  playerRig.group.visible = true;
+  drivingCar = null;
+  updateHud();
+}
+exitCarBtn.addEventListener("click", exitCarFn);
+
+// ==========================================================
+// たてもの／くるまの じょうたい を さいこうちく（よみこみ時）
+// ==========================================================
+function rebuildFromState() {
+  state.structures.forEach((s) => placeStructureMesh(s.type, s.x, s.z, s.paletteIndex));
+  state.cars.forEach((c) => spawnCar(c.x, c.z, c.colorIndex));
+}
+
+// ==========================================================
+// ブロック（あつめる アイテム）
+// ==========================================================
+const fieldBlocks = []; // {mesh, colorKey, baseY}
+const MAX_FIELD_BLOCKS = 16;
+
+function isNearAnyStructureOrCar(x, z, radius) {
+  if (PLOTS.some((p) => Math.hypot(x - p.x, z - p.z) < radius)) return true;
+  if (CAR_SPOTS.some((p) => Math.hypot(x - p.x, z - p.z) < radius)) return true;
+  return false;
+}
 
 function spawnBlock() {
   if (fieldBlocks.length >= MAX_FIELD_BLOCKS) return;
   const palette = unlockedColors();
-  // 赤(かべ)は 多めに でるように じゅうみを つける
   const weighted = [];
   palette.forEach((c) => {
     const weight = c.key === "red" ? 3 : c.key === "yellow" ? 2 : 1;
     for (let i = 0; i < weight; i++) weighted.push(c.key);
   });
   const colorKey = weighted[Math.floor(Math.random() * weighted.length)];
-  const size = 22;
 
-  let x, y;
-  for (let tries = 0; tries < 10; tries++) {
-    x = Math.random() * (CANVAS_W - size * 2) + size;
-    y = Math.random() * (CANVAS_H - size * 2) + size;
-    const tooCloseToHouse = state.houses.some((h) => Math.hypot(x - h.x, y - (h.y - HOUSE_BODY_H / 2)) < 55);
-    const tooCloseToTree = TREES.some((t) => Math.hypot(x - t.x, y - t.y) < 34);
-    if (!tooCloseToHouse && !tooCloseToTree) break;
-  }
+  let x, z;
+  let tries = 0;
+  do {
+    x = (Math.random() * 2 - 1) * (FIELD_HALF_X - 2);
+    z = (Math.random() * 2 - 1) * (FIELD_HALF_Z - 2);
+    tries++;
+  } while (isNearAnyStructureOrCar(x, z, 4.5) && tries < 20);
 
-  fieldBlocks.push({ x, y, size, colorKey });
+  const hex = colorHex(colorKey);
+  const group = new THREE.Group();
+  const cube = new THREE.Mesh(
+    new THREE.BoxGeometry(0.6, 0.6, 0.6),
+    new THREE.MeshLambertMaterial({ color: col(hex) })
+  );
+  group.add(cube);
+  const stud = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.14, 0.14, 0.14, 10),
+    new THREE.MeshLambertMaterial({ color: col(shadeColor(hex, -10)) })
+  );
+  stud.position.y = 0.37;
+  group.add(stud);
+  group.position.set(x, 0.5, z);
+  townGroup.add(group);
+
+  fieldBlocks.push({ group, colorKey, baseY: 0.5, spin: Math.random() * Math.PI * 2 });
 }
 
-// さいしょに ブロックを まいておく
-for (let i = 0; i < 8; i++) spawnBlock();
+for (let i = 0; i < 10; i++) spawnBlock();
 setInterval(() => {
-  if (!screens.collect.classList.contains("hidden")) spawnBlock();
-}, 1800);
+  if (mode === "town") spawnBlock();
+}, 1600);
 
-function colorHex(key) {
-  return COLORS.find((c) => c.key === key).hex;
-}
-
-function updatePlayer() {
-  let dx = 0;
-  let dy = 0;
-  if (keys.up) dy -= 1;
-  if (keys.down) dy += 1;
-  if (keys.left) dx -= 1;
-  if (keys.right) dx += 1;
-  if (dx !== 0 && dy !== 0) {
-    // ななめ移動が はやくなりすぎないように
-    dx *= 0.7071;
-    dy *= 0.7071;
-  }
-  const isMoving = dx !== 0 || dy !== 0;
-  if (isMoving) {
-    walkPhase += 0.25;
-    if (Math.abs(dx) > Math.abs(dy)) {
-      facing = dx < 0 ? "left" : "right";
-    } else if (dy !== 0) {
-      facing = dy < 0 ? "up" : "down";
-    }
-  } else {
-    walkPhase = 0;
-  }
-  player.x += dx * player.speed;
-  player.y += dy * player.speed;
-  const half = player.size / 2;
-  player.x = Math.max(half, Math.min(CANVAS_W - half, player.x));
-  player.y = Math.max(half, Math.min(CANVAS_H - half, player.y));
-}
-
-function checkCollisions() {
+function checkBlockCollisions(pos) {
   for (let i = fieldBlocks.length - 1; i >= 0; i--) {
     const b = fieldBlocks[i];
-    const distX = player.x - b.x;
-    const distY = player.y - b.y;
-    const dist = Math.sqrt(distX * distX + distY * distY);
-    if (dist < player.size / 2 + b.size / 2) {
-      // かくとく！
+    const dist = Math.hypot(pos.x - b.group.position.x, pos.z - b.group.position.z);
+    if (dist < 1.1) {
       state.inventory[b.colorKey]++;
       state.totalCollected++;
+      townGroup.remove(b.group);
       fieldBlocks.splice(i, 1);
       playTone(700, 0.12);
       renderInventory();
@@ -293,313 +855,354 @@ function checkCollisions() {
   }
 }
 
-function drawTownBackground() {
-  // しばふ
-  ctx.fillStyle = "#7bc96f";
-  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-  ctx.strokeStyle = "rgba(255,255,255,0.15)";
-  for (let x = 0; x < CANVAS_W; x += 40) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, CANVAS_H);
-    ctx.stroke();
-  }
-
-  // みち
-  ROADS.forEach((r) => {
-    ctx.fillStyle = "#d9c9a0";
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.strokeStyle = "#c2ae7e";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(r.x, r.y, r.w, r.h);
-  });
-  // まんなかどおりの てんせん
-  ctx.strokeStyle = "#fff4d6";
-  ctx.lineWidth = 3;
-  ctx.setLineDash([10, 10]);
-  ctx.beginPath();
-  ctx.moveTo(CANVAS_W / 2, 0);
-  ctx.lineTo(CANVAS_W / 2, CANVAS_H);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // き
-  TREES.forEach((t) => drawTree(t.x, t.y));
-}
-
-function drawTree(x, y) {
-  ctx.beginPath();
-  ctx.ellipse(x, y + 26, 16, 6, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(0,0,0,0.18)";
-  ctx.fill();
-
-  ctx.fillStyle = "#8a5a2b";
-  roundRect(ctx, x - 4, y + 2, 8, 20, 2);
-  ctx.fill();
-
-  const grad = ctx.createRadialGradient(x - 5, y - 12, 2, x, y - 8, 20);
-  grad.addColorStop(0, "#7fd67f");
-  grad.addColorStop(1, "#3f9142");
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(x, y - 8, 18, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawHouse(h) {
-  const halfW = HOUSE_W / 2;
-
-  // かげ
-  ctx.beginPath();
-  ctx.ellipse(h.x, h.y + 4, halfW * 0.9, 8, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(0,0,0,0.25)";
-  ctx.fill();
-
-  // かべ
-  const wallGrad = ctx.createLinearGradient(h.x - halfW, h.y - HOUSE_BODY_H, h.x + halfW, h.y);
-  wallGrad.addColorStop(0, shadeColor(h.wallHex, 22));
-  wallGrad.addColorStop(1, shadeColor(h.wallHex, -18));
-  ctx.fillStyle = wallGrad;
-  roundRect(ctx, h.x - halfW, h.y - HOUSE_BODY_H, HOUSE_W, HOUSE_BODY_H, 4);
-  ctx.fill();
-  ctx.strokeStyle = shadeColor(h.wallHex, -35);
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  // やね
-  const roofGrad = ctx.createLinearGradient(h.x, h.y - HOUSE_BODY_H - HOUSE_ROOF_H, h.x, h.y - HOUSE_BODY_H);
-  roofGrad.addColorStop(0, shadeColor(h.roofHex, 25));
-  roofGrad.addColorStop(1, shadeColor(h.roofHex, -15));
-  ctx.fillStyle = roofGrad;
-  ctx.beginPath();
-  ctx.moveTo(h.x - halfW - 6, h.y - HOUSE_BODY_H);
-  ctx.lineTo(h.x + halfW + 6, h.y - HOUSE_BODY_H);
-  ctx.lineTo(h.x, h.y - HOUSE_BODY_H - HOUSE_ROOF_H);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = shadeColor(h.roofHex, -35);
-  ctx.stroke();
-
-  // まど
-  ctx.fillStyle = "#eaf6ff";
-  [-1, 1].forEach((side) => {
-    const wx = h.x + side * (halfW * 0.55) - 6;
-    roundRect(ctx, wx, h.y - HOUSE_BODY_H + 8, 12, 12, 2);
-    ctx.fill();
-  });
-  ctx.strokeStyle = "rgba(0,0,0,0.25)";
-  ctx.lineWidth = 1;
-  [-1, 1].forEach((side) => {
-    const wx = h.x + side * (halfW * 0.55) - 6;
-    ctx.strokeRect(wx, h.y - HOUSE_BODY_H + 8, 12, 12);
-  });
-
-  // ドア
-  const doorGrad = ctx.createLinearGradient(h.x - 8, h.y - 20, h.x + 8, h.y);
-  doorGrad.addColorStop(0, shadeColor(h.doorHex, 20));
-  doorGrad.addColorStop(1, shadeColor(h.doorHex, -20));
-  ctx.fillStyle = doorGrad;
-  roundRect(ctx, h.x - 8, h.y - 20, 16, 20, 3);
-  ctx.fill();
-  ctx.fillStyle = "#fff2c2";
-  ctx.beginPath();
-  ctx.arc(h.x + 4, h.y - 9, 1.6, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawPerson(x, y, size) {
-  const bob = Math.sin(walkPhase) * 2.4;
-  const legSwing = Math.sin(walkPhase) * 5;
-
-  // じめんの かげ
-  ctx.beginPath();
-  ctx.ellipse(x, y + size * 0.62, size * 0.42, size * 0.14, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(0,0,0,0.22)";
-  ctx.fill();
-
-  const headR = size * 0.28;
-  const bodyTop = y - size * 0.18 + bob * 0.3;
-  const bodyH = size * 0.5;
-  const bodyW = size * 0.5;
-  const headY = bodyTop - headR * 0.9;
-
-  // あし
-  ctx.strokeStyle = "#3a4a63";
-  ctx.lineCap = "round";
-  ctx.lineWidth = size * 0.16;
-  ctx.beginPath();
-  ctx.moveTo(x - size * 0.12, bodyTop + bodyH);
-  ctx.lineTo(x - size * 0.12 + legSwing * 0.4, bodyTop + bodyH + size * 0.28);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x + size * 0.12, bodyTop + bodyH);
-  ctx.lineTo(x + size * 0.12 - legSwing * 0.4, bodyTop + bodyH + size * 0.28);
-  ctx.stroke();
-
-  // うで
-  ctx.strokeStyle = "#ffd9a8";
-  ctx.lineWidth = size * 0.14;
-  ctx.beginPath();
-  ctx.moveTo(x - bodyW / 2, bodyTop + size * 0.08);
-  ctx.lineTo(x - bodyW / 2 - legSwing * 0.3, bodyTop + size * 0.32);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x + bodyW / 2, bodyTop + size * 0.08);
-  ctx.lineTo(x + bodyW / 2 + legSwing * 0.3, bodyTop + size * 0.32);
-  ctx.stroke();
-
-  // からだ（シャツ）
-  const shirtGrad = ctx.createLinearGradient(x - bodyW / 2, bodyTop, x + bodyW / 2, bodyTop + bodyH);
-  shirtGrad.addColorStop(0, "#5cc4f2");
-  shirtGrad.addColorStop(1, "#2f8fce");
-  ctx.fillStyle = shirtGrad;
-  roundRect(ctx, x - bodyW / 2, bodyTop, bodyW, bodyH, size * 0.16);
-  ctx.fill();
-  ctx.strokeStyle = "#1f6a9c";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // あたま
-  const headGrad = ctx.createRadialGradient(x - headR * 0.3, headY - headR * 0.3, 1, x, headY, headR);
-  headGrad.addColorStop(0, "#ffe9c9");
-  headGrad.addColorStop(1, "#f4c98f");
-  ctx.fillStyle = headGrad;
-  ctx.beginPath();
-  ctx.arc(x, headY, headR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "#d9a45f";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // かみのけ
-  ctx.fillStyle = "#5b3a29";
-  ctx.beginPath();
-  ctx.arc(x, headY - headR * 0.15, headR * 1.02, Math.PI, 0);
-  ctx.fill();
-
-  const faceShift = facing === "left" ? -2 : facing === "right" ? 2 : 0;
-  // め
-  ctx.fillStyle = "#333";
-  ctx.beginPath();
-  ctx.arc(x - 4 + faceShift, headY, 1.8, 0, Math.PI * 2);
-  ctx.arc(x + 4 + faceShift, headY, 1.8, 0, Math.PI * 2);
-  ctx.fill();
-  // くち
-  ctx.beginPath();
-  ctx.arc(x + faceShift, headY + 4, 3, 0, Math.PI);
-  ctx.stroke();
-}
-
-function drawField() {
-  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-
-  drawTownBackground();
-
-  state.houses.forEach((h) => drawHouse(h));
-
-  // ブロック（レゴふう：たちたい かんじの しかく＋うえに ポッチ）
-  fieldBlocks.forEach((b) => {
-    // じめんに おちる かげ
-    ctx.beginPath();
-    ctx.ellipse(b.x, b.y + b.size / 2 + 2, b.size * 0.45, b.size * 0.16, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(0,0,0,0.2)";
-    ctx.fill();
-
-    const base = colorHex(b.colorKey);
-    const grad = ctx.createLinearGradient(b.x - b.size / 2, b.y - b.size / 2, b.x + b.size / 2, b.y + b.size / 2);
-    grad.addColorStop(0, shadeColor(base, 32));
-    grad.addColorStop(0.5, base);
-    grad.addColorStop(1, shadeColor(base, -26));
-    ctx.fillStyle = grad;
-    roundRect(ctx, b.x - b.size / 2, b.y - b.size / 2, b.size, b.size, 5);
-    ctx.fill();
-    ctx.strokeStyle = shadeColor(base, -40);
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // ポッチ（つやを つけて まるく みせる）
-    const studGrad = ctx.createRadialGradient(b.x - 1.5, b.y - b.size / 2 + 1.5, 0.5, b.x, b.y - b.size / 2 + 3, 5);
-    studGrad.addColorStop(0, "rgba(255,255,255,0.95)");
-    studGrad.addColorStop(1, shadeColor(base, -12));
-    ctx.fillStyle = studGrad;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y - b.size / 2 + 3, 4.5, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  // プレイヤー（人がた）
-  drawPerson(player.x, player.y, player.size * 1.7);
-}
-
-function roundRect(context, x, y, w, h, r) {
-  context.beginPath();
-  context.moveTo(x + r, y);
-  context.arcTo(x + w, y, x + w, y + h, r);
-  context.arcTo(x + w, y + h, x, y + h, r);
-  context.arcTo(x, y + h, x, y, r);
-  context.arcTo(x, y, x + w, y, r);
-  context.closePath();
-}
-
-let loopRunning = false;
-function gameLoop() {
-  if (screens.collect.classList.contains("hidden")) {
-    loopRunning = false;
-    return;
-  }
-  updatePlayer();
-  checkCollisions();
-  checkHouseDoors();
-  drawField();
-  requestAnimationFrame(gameLoop);
-}
-
-// ---------- いえの ドアに ふれたら なかに はいる ----------
-function checkHouseDoors() {
-  for (const h of state.houses) {
-    const doorX = h.x;
-    const doorY = h.y - 8;
-    const dist = Math.hypot(player.x - doorX, player.y - doorY);
-    if (dist < player.size / 2 + 12) {
-      enterHouse(h);
+// ==========================================================
+// たてものの ドアと くるまへの アクセス はんてい
+// ==========================================================
+function checkDoors(pos) {
+  for (const s of placedStructures) {
+    const dist = Math.hypot(pos.x - s.doorWorld.x, pos.z - s.doorWorld.z);
+    if (dist < 1.6) {
+      enterBuilding(s);
       return;
     }
   }
 }
 
-function enterHouse(house) {
-  currentHouse = house;
-  const room = document.querySelector("#inside-screen .room");
-  room.style.setProperty("--wall-color", shadeColor(house.wallHex, 55));
+function checkCarBoarding(pos) {
+  for (const c of placedCars) {
+    const dist = Math.hypot(pos.x - c.x, pos.z - c.z);
+    if (dist < 2.1) {
+      boardCar(c);
+      return;
+    }
+  }
+}
+
+// ==========================================================
+// たてものの なか（3D インテリア）
+// ==========================================================
+const insideGroup = new THREE.Group();
+insideGroup.visible = false;
+scene.add(insideGroup);
+
+const insideWallMat = new THREE.MeshLambertMaterial({ color: 0xf6e3c6 });
+{
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(9, 7),
+    new THREE.MeshLambertMaterial({ color: 0xa4753f })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  insideGroup.add(floor);
+
+  const planks = new THREE.GridHelper(9, 12, 0x8a5a2b, 0x8a5a2b);
+  planks.position.y = 0.01;
+  insideGroup.add(planks);
+
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(9, 4.5, 0.2), insideWallMat);
+  backWall.position.set(0, 2.25, -3.6);
+  insideGroup.add(backWall);
+
+  const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4.5, 7), insideWallMat);
+  leftWall.position.set(-4.4, 2.25, 0);
+  insideGroup.add(leftWall);
+
+  const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4.5, 7), insideWallMat);
+  rightWall.position.set(4.4, 2.25, 0);
+  insideGroup.add(rightWall);
+
+  const window1 = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.8, 1.4),
+    new THREE.MeshLambertMaterial({ color: 0xbfe8ff })
+  );
+  window1.position.set(2.2, 2.7, -3.49);
+  insideGroup.add(window1);
+
+  const picture = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.9, 0.7),
+    new THREE.MeshLambertMaterial({ color: 0xffe08a })
+  );
+  picture.position.set(-2.3, 2.6, -3.49);
+  insideGroup.add(picture);
+
+  const bed = new THREE.Mesh(
+    new THREE.BoxGeometry(2.2, 0.6, 3.2),
+    new THREE.MeshLambertMaterial({ color: 0x5a92c9 })
+  );
+  bed.position.set(-3, 0.3, -1.6);
+  insideGroup.add(bed);
+  const pillow = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6, 0.25, 0.8),
+    new THREE.MeshLambertMaterial({ color: 0xfffdf5 })
+  );
+  pillow.position.set(-3, 0.72, -2.9);
+  insideGroup.add(pillow);
+
+  const table = new THREE.Mesh(
+    new THREE.BoxGeometry(1.4, 0.7, 1.4),
+    new THREE.MeshLambertMaterial({ color: 0xa4753f })
+  );
+  table.position.set(2.6, 0.35, 1.6);
+  insideGroup.add(table);
+
+  const rug = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.4, 1.4, 0.05, 24),
+    new THREE.MeshLambertMaterial({ color: 0xe06666 })
+  );
+  rug.position.set(0, 0.03, 1.2);
+  insideGroup.add(rug);
+
+  const potMat = new THREE.MeshLambertMaterial({ color: 0xa4753f });
+  const leafMat = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.24, 0.4, 10), potMat);
+  pot.position.set(3.6, 0.2, -2.8);
+  insideGroup.add(pot);
+  const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 10), leafMat);
+  leaf.position.set(3.6, 0.75, -2.8);
+  insideGroup.add(leaf);
+}
+
+let currentBuilding = null;
+let outsidePlayerPos = { x: 0, z: 4 };
+
+function enterBuilding(structure) {
+  currentBuilding = structure;
+  outsidePlayerPos = { x: player.x, z: player.z };
+  insideWallMat.color = col(shadeColor(structure.wallHex, 55));
+  townGroup.visible = false;
+  insideGroup.visible = true;
+  mode = "inside";
+  player.x = 0;
+  player.z = 2.6;
   playTone(600, 0.15);
-  showScreen("inside");
+  showMessage(`${structure.label} の なかに はいったよ`);
+  updateHud();
 }
 
-function exitHouse() {
-  if (currentHouse) {
-    player.x = Math.max(player.size / 2, Math.min(CANVAS_W - player.size / 2, currentHouse.x));
-    player.y = Math.min(CANVAS_H - player.size / 2, currentHouse.y + 40);
+function exitBuilding() {
+  if (currentBuilding) {
+    const angle = Math.atan2(currentBuilding.doorWorld.x - currentBuilding.x, currentBuilding.doorWorld.z - currentBuilding.z);
+    player.x = currentBuilding.doorWorld.x + Math.sin(angle) * 1.6;
+    player.z = currentBuilding.doorWorld.z + Math.cos(angle) * 1.6;
   }
-  currentHouse = null;
-  showScreen("collect");
+  currentBuilding = null;
+  townGroup.visible = true;
+  insideGroup.visible = false;
+  mode = "town";
+  updateHud();
+}
+exitHouseBtn.addEventListener("click", exitBuilding);
+
+// ==========================================================
+// NPC（ひと・どうぶつ）
+// ==========================================================
+function createQuadruped(dims, colors) {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(dims.bw, dims.bh, dims.bd),
+    new THREE.MeshLambertMaterial({ color: col(colors.body) })
+  );
+  body.position.y = dims.legH + dims.bh / 2;
+  group.add(body);
+
+  const head = new THREE.Mesh(
+    new THREE.BoxGeometry(dims.headSize, dims.headSize, dims.headSize),
+    new THREE.MeshLambertMaterial({ color: col(colors.head || colors.body) })
+  );
+  head.position.set(0, dims.legH + dims.bh * 0.7, dims.bd / 2 + dims.headSize * 0.3);
+  group.add(head);
+
+  const legPivots = [];
+  const legPositions = [
+    [-dims.bw / 2 + dims.legW / 2, dims.bd / 2 - dims.legW / 2],
+    [dims.bw / 2 - dims.legW / 2, dims.bd / 2 - dims.legW / 2],
+    [-dims.bw / 2 + dims.legW / 2, -dims.bd / 2 + dims.legW / 2],
+    [dims.bw / 2 - dims.legW / 2, -dims.bd / 2 + dims.legW / 2],
+  ];
+  legPositions.forEach(([lx, lz]) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(lx, dims.legH, lz);
+    const leg = new THREE.Mesh(
+      new THREE.BoxGeometry(dims.legW, dims.legH, dims.legW),
+      new THREE.MeshLambertMaterial({ color: col(colors.leg || colors.body) })
+    );
+    leg.position.y = -dims.legH / 2;
+    pivot.add(leg);
+    group.add(pivot);
+    legPivots.push(pivot);
+  });
+
+  const tail = new THREE.Mesh(
+    new THREE.BoxGeometry(dims.legW * 0.7, dims.legW * 0.7, dims.bd * 0.4),
+    new THREE.MeshLambertMaterial({ color: col(colors.body) })
+  );
+  tail.position.set(0, dims.legH + dims.bh * 0.6, -dims.bd / 2 - dims.bd * 0.15);
+  group.add(tail);
+
+  return {
+    group,
+    animate(phase, moving) {
+      const swing = moving ? Math.sin(phase) * 0.6 : 0;
+      legPivots[0].rotation.x = swing;
+      legPivots[3].rotation.x = swing;
+      legPivots[1].rotation.x = -swing;
+      legPivots[2].rotation.x = -swing;
+    },
+  };
 }
 
-document.getElementById("exit-house-btn").addEventListener("click", exitHouse);
+function createCow() {
+  return createQuadruped(
+    { bw: 1.1, bh: 0.85, bd: 1.7, legW: 0.22, legH: 0.55, headSize: 0.55 },
+    { body: "#f7f5ef", head: "#3a3a3a", leg: "#3a3a3a" }
+  );
+}
+function createDog() {
+  return createQuadruped(
+    { bw: 0.55, bh: 0.45, bd: 0.95, legW: 0.16, legH: 0.35, headSize: 0.35 },
+    { body: "#a0662f" }
+  );
+}
+function createCat() {
+  return createQuadruped(
+    { bw: 0.4, bh: 0.35, bd: 0.7, legW: 0.12, legH: 0.28, headSize: 0.28 },
+    { body: "#8a8a8a" }
+  );
+}
 
-function resumeCollectLoop() {
-  if (!loopRunning) {
-    loopRunning = true;
-    requestAnimationFrame(gameLoop);
+function createBird() {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22, 10, 10),
+    new THREE.MeshLambertMaterial({ color: col("#e63946") })
+  );
+  group.add(body);
+  const beak = new THREE.Mesh(
+    new THREE.ConeGeometry(0.06, 0.16, 6),
+    new THREE.MeshLambertMaterial({ color: col("#f9c74f") })
+  );
+  beak.rotation.x = Math.PI / 2;
+  beak.position.set(0, 0, 0.25);
+  group.add(beak);
+  const wingMat = new THREE.MeshLambertMaterial({ color: col("#c1121f") });
+  const wingPivots = [];
+  [-1, 1].forEach((side) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(side * 0.2, 0.05, 0);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.05, 0.22), wingMat);
+    wing.position.x = side * 0.17;
+    pivot.add(wing);
+    group.add(pivot);
+    wingPivots.push(pivot);
+  });
+  return {
+    group,
+    isFlyer: true,
+    animate(phase) {
+      const flap = Math.sin(phase * 4) * 0.6;
+      wingPivots[0].rotation.z = flap;
+      wingPivots[1].rotation.z = -flap;
+    },
+  };
+}
+
+const NPC_WANDER_HALF_X = FIELD_HALF_X - 6;
+const NPC_WANDER_HALF_Z = FIELD_HALF_Z - 6;
+
+const npcs = [];
+
+function spawnNpc(rig, options) {
+  townGroup.add(rig.group);
+  const npc = {
+    rig,
+    x: (Math.random() * 2 - 1) * NPC_WANDER_HALF_X,
+    z: (Math.random() * 2 - 1) * NPC_WANDER_HALF_Z,
+    facing: 0,
+    speed: options.speed,
+    target: null,
+    phase: Math.random() * Math.PI * 2,
+    isFlyer: !!options.isFlyer,
+    flyHeight: options.flyHeight || 0,
+  };
+  npc.rig.group.position.set(npc.x, npc.isFlyer ? npc.flyHeight : 0, npc.z);
+  npcs.push(npc);
+}
+
+const humanShirts = ["#ff9f43", "#43aa8b", "#9d4edd"];
+for (let i = 0; i < 3; i++) {
+  const rig = createHumanoid({
+    skin: "#f4c98f",
+    shirt: humanShirts[i % humanShirts.length],
+    pants: "#5b3a29",
+    scale: 0.95,
+  });
+  spawnNpc(rig, { speed: 1.6 });
+}
+for (let i = 0; i < 2; i++) spawnNpc(createCow(), { speed: 1.1 });
+for (let i = 0; i < 2; i++) spawnNpc(createDog(), { speed: 2.2 });
+for (let i = 0; i < 2; i++) spawnNpc(createCat(), { speed: 1.9 });
+for (let i = 0; i < 2; i++) spawnNpc(createBird(), { speed: 2.6, isFlyer: true, flyHeight: 2.2 + Math.random() });
+
+function updateNpc(npc, delta, time) {
+  if (!npc.target || Math.hypot(npc.target.x - npc.x, npc.target.z - npc.z) < 0.6) {
+    npc.target = {
+      x: (Math.random() * 2 - 1) * NPC_WANDER_HALF_X,
+      z: (Math.random() * 2 - 1) * NPC_WANDER_HALF_Z,
+    };
+  }
+  const dx = npc.target.x - npc.x;
+  const dz = npc.target.z - npc.z;
+  const dist = Math.hypot(dx, dz);
+  const moving = dist > 0.1;
+  if (moving) {
+    const nx = dx / dist;
+    const nz = dz / dist;
+    npc.x += nx * npc.speed * delta;
+    npc.z += nz * npc.speed * delta;
+    npc.facing = Math.atan2(nx, nz);
+  }
+  npc.phase += delta * 6;
+  npc.rig.group.position.x = npc.x;
+  npc.rig.group.position.z = npc.z;
+  npc.rig.group.rotation.y = npc.facing;
+  if (npc.isFlyer) {
+    npc.rig.group.position.y = npc.flyHeight + Math.sin(time * 2 + npc.phase) * 0.3;
+    npc.rig.animate(npc.phase, moving);
+  } else {
+    npc.rig.animate(npc.phase, moving);
   }
 }
 
-// ---------- キーボード そうさ ----------
-window.addEventListener("keydown", (e) => {
-  setKey(e.key, true);
-});
-window.addEventListener("keyup", (e) => {
-  setKey(e.key, false);
-});
+// ==========================================================
+// カメラ
+// ==========================================================
+const CAM_OFFSET = new THREE.Vector3(0, 13, 15);
+const cameraTarget = new THREE.Vector3();
+const desiredCamPos = new THREE.Vector3();
+
+function updateCamera(pos, delta) {
+  const py = pos.y || 0;
+  desiredCamPos.set(pos.x + CAM_OFFSET.x, py + CAM_OFFSET.y, pos.z + CAM_OFFSET.z);
+  const lerpAmt = 1 - Math.pow(0.001, delta);
+  camera.position.lerp(desiredCamPos, lerpAmt);
+  cameraTarget.set(pos.x, py + 1.2, pos.z);
+  camera.lookAt(cameraTarget);
+}
+
+const INSIDE_CAM_OFFSET = new THREE.Vector3(0, 5.5, 6.5);
+function updateInsideCamera(pos, delta) {
+  const py = pos.y || 0;
+  desiredCamPos.set(pos.x + INSIDE_CAM_OFFSET.x, py + INSIDE_CAM_OFFSET.y, pos.z + INSIDE_CAM_OFFSET.z);
+  const lerpAmt = 1 - Math.pow(0.001, delta);
+  camera.position.lerp(desiredCamPos, lerpAmt);
+  cameraTarget.set(pos.x, py + 1, pos.z);
+  camera.lookAt(cameraTarget);
+}
+
+// ==========================================================
+// にゅうりょく
+// ==========================================================
+window.addEventListener("keydown", (e) => setKey(e.key, true));
+window.addEventListener("keyup", (e) => setKey(e.key, false));
 
 function setKey(key, isDown) {
   switch (key) {
@@ -626,7 +1229,6 @@ function setKey(key, isDown) {
   }
 }
 
-// ---------- タッチ／マウスの じゅうじボタン ----------
 function bindHold(id, key) {
   const el = document.getElementById(id);
   const start = (e) => {
@@ -649,154 +1251,90 @@ bindHold("btn-left", "left");
 bindHold("btn-right", "right");
 
 // ==========================================================
-// つくる がめん（グリッドに ブロックを おく）
+// メインループ
 // ==========================================================
-const GRID_COLS = 14;
-const GRID_ROWS = 10;
-let selectedColor = "red";
-let eraserMode = false;
+const clock = new THREE.Clock();
+let started = false;
 
-function renderPalette() {
-  const palette = document.getElementById("color-palette");
-  palette.innerHTML = "";
-  unlockedColors().forEach((c) => {
-    const btn = document.createElement("button");
-    btn.className = "color-swatch-btn" + (selectedColor === c.key && !eraserMode ? " selected" : "");
-    btn.style.background = `linear-gradient(155deg, ${shadeColor(c.hex, 32)}, ${c.hex} 50%, ${shadeColor(c.hex, -22)})`;
-    btn.style.setProperty("--brick-dark", shadeColor(c.hex, -32));
-    btn.title = c.name;
-    btn.addEventListener("click", () => {
-      selectedColor = c.key;
-      eraserMode = false;
-      renderPalette();
-    });
-    palette.appendChild(btn);
-  });
-}
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = Math.min(clock.getDelta(), 0.1);
+  const time = clock.elapsedTime;
 
-document.getElementById("eraser-btn").addEventListener("click", () => {
-  eraserMode = true;
-  renderPalette();
-});
+  if (!started) return;
 
-function renderBuildGrid() {
-  const gridEl = document.getElementById("build-grid");
-  gridEl.innerHTML = "";
-  for (let r = 0; r < GRID_ROWS; r++) {
-    for (let c = 0; c < GRID_COLS; c++) {
-      const cell = document.createElement("div");
-      cell.className = "cell";
-      const colorKey = state.grid[r][c];
-      if (colorKey) {
-        const hex = colorHex(colorKey);
-        cell.classList.add("filled");
-        cell.style.setProperty("--brick-color", hex);
-        cell.style.setProperty("--brick-light", shadeColor(hex, 35));
-        cell.style.setProperty("--brick-dark", shadeColor(hex, -30));
-      }
-      cell.addEventListener("click", () => onCellClick(r, c));
-      gridEl.appendChild(cell);
-    }
-  }
-}
-
-function onCellClick(r, c) {
-  const current = state.grid[r][c];
-  if (eraserMode) {
-    if (current) {
-      state.inventory[current]++;
-      state.grid[r][c] = null;
-      playTone(300, 0.1);
-    }
+  if (mode === "inside") {
+    const moving = applyMovement(player, 3.5, delta, (a) => (player.facing = a));
+    player.x = Math.max(-3.9, Math.min(3.9, player.x));
+    player.z = Math.max(-3, Math.min(3.3, player.z));
+    playerRig.group.position.set(player.x, 0, player.z);
+    playerRig.group.rotation.y = player.facing;
+    if (moving) walkPhase += delta * 8;
+    playerRig.animate(walkPhase, moving);
+    updateInsideCamera(player, delta);
   } else {
-    if (current) {
-      showBuildMessage("そこには もう ブロックが あるよ");
-      return;
+    if (drivingCar) {
+      const carState = drivingCar;
+      const carPos = { x: carState.x, z: carState.z };
+      const moving = applyMovement(carPos, 9, delta, (a) => (carState.facing = a));
+      carPos.x = Math.max(-FIELD_HALF_X + 2, Math.min(FIELD_HALF_X - 2, carPos.x));
+      carPos.z = Math.max(-FIELD_HALF_Z + 2, Math.min(FIELD_HALF_Z - 2, carPos.z));
+      carState.x = carPos.x;
+      carState.z = carPos.z;
+      carState.mesh.position.set(carState.x, 0, carState.z);
+      if (moving) carState.mesh.rotation.y = carState.facing;
+      checkBlockCollisions(carState);
+      updateCamera(carState, delta);
+    } else {
+      const moving = applyMovement(player, player.speed, delta, (a) => (player.facing = a));
+      player.x = Math.max(-FIELD_HALF_X + 1, Math.min(FIELD_HALF_X - 1, player.x));
+      player.z = Math.max(-FIELD_HALF_Z + 1, Math.min(FIELD_HALF_Z - 1, player.z));
+      playerRig.group.position.set(player.x, 0, player.z);
+      playerRig.group.rotation.y = player.facing;
+      if (moving) walkPhase += delta * 8;
+      playerRig.animate(walkPhase, moving);
+      checkBlockCollisions(player);
+      checkDoors(player);
+      checkCarBoarding(player);
+      updateCamera(player, delta);
     }
-    if (state.inventory[selectedColor] <= 0) {
-      showBuildMessage("その いろの ブロックが たりないよ！あつめてこよう");
-      return;
-    }
-    state.inventory[selectedColor]--;
-    state.grid[r][c] = selectedColor;
-    playTone(500, 0.08);
+
+    npcs.forEach((npc) => updateNpc(npc, delta, time));
+
+    fieldBlocks.forEach((b) => {
+      b.spin += delta * 1.4;
+      b.group.rotation.y = b.spin;
+      b.group.position.y = b.baseY + Math.sin(time * 2 + b.spin) * 0.08;
+    });
+
+    clouds.forEach((cloud) => {
+      const u = cloud.userData;
+      cloud.position.set(
+        player.x + u.baseX + Math.sin(time * u.speed + u.phase) * 6,
+        u.baseY,
+        player.z + u.baseZ
+      );
+    });
+    sun.position.set(player.x + 24, 34, player.z - 26);
   }
-  renderInventory();
-  renderBuildGrid();
-  saveState();
+
+  renderer.render(scene, camera);
 }
-
-let buildMessageTimer = null;
-function showBuildMessage(msg) {
-  const el = document.getElementById("build-message");
-  el.textContent = msg;
-  clearTimeout(buildMessageTimer);
-  buildMessageTimer = setTimeout(() => {
-    el.textContent = "";
-  }, 2500);
-}
-
-// ---------- まちに いえを たてる ----------
-document.getElementById("build-house-btn").addEventListener("click", () => {
-  buildHouseOnField();
-});
-
-function findEmptyPlot() {
-  return HOUSE_PLOTS.find((plot) => !state.houses.some((h) => h.x === plot.x && h.y === plot.y));
-}
-
-function buildHouseOnField() {
-  for (const key in HOUSE_RECIPE) {
-    if (state.inventory[key] < HOUSE_RECIPE[key]) {
-      const c = COLORS.find((x) => x.key === key);
-      showCollectMessage(`「${c.name}」の ブロックが あと ${HOUSE_RECIPE[key] - state.inventory[key]}こ たりないよ`);
-      return;
-    }
-  }
-
-  const plot = findEmptyPlot();
-  if (!plot) {
-    showCollectMessage("まちに もう あきちが ないよ！");
-    return;
-  }
-
-  state.houses.push({
-    x: plot.x,
-    y: plot.y,
-    wallHex: colorHex("red"),
-    roofHex: colorHex("gray"),
-    doorHex: colorHex("blue"),
-  });
-  for (const key in HOUSE_RECIPE) {
-    state.inventory[key] -= HOUSE_RECIPE[key];
-  }
-  playTone(900, 0.2);
-  showCollectMessage("🏠 まちに いえが たった！ドアから 入れるよ");
-  renderInventory();
-  saveState();
-}
-
-// ---------- ぜんぶ けす ----------
-document.getElementById("clear-btn").addEventListener("click", () => {
-  const ok = window.confirm("まちを ぜんぶ けしますか？（ブロックは かえってきます）");
-  if (!ok) return;
-  for (let r = 0; r < GRID_ROWS; r++) {
-    for (let c = 0; c < GRID_COLS; c++) {
-      const colorKey = state.grid[r][c];
-      if (colorKey) {
-        state.inventory[colorKey]++;
-        state.grid[r][c] = null;
-      }
-    }
-  }
-  renderInventory();
-  renderBuildGrid();
-  saveState();
-});
+requestAnimationFrame(animate);
 
 // ==========================================================
-// しょきか
+// スタート
 // ==========================================================
+document.getElementById("start-btn").addEventListener("click", () => {
+  titleScreen.classList.add("hidden");
+  gameScreen.classList.remove("hidden");
+  resizeRenderer();
+  started = true;
+  updateHud();
+});
+
 loadState();
+rebuildFromState();
 soundBtn.textContent = state.soundOn ? "🔊" : "🔇";
 renderInventory();
+updateHud();
