@@ -221,6 +221,16 @@ body {
   box-shadow: none;
 }
 
+.run-btn {
+  width: auto;
+  height: auto;
+  border-radius: 20px;
+  padding: 8px 20px;
+  font-size: 1em;
+  font-weight: bold;
+  margin-top: 4px;
+}
+
 @media (max-width: 480px) {
   #title-screen h1 {
     font-size: 1.6em;

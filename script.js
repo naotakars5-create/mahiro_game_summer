@@ -119,6 +119,7 @@ const buildButtons = [
   document.getElementById("build-shop-btn"),
   document.getElementById("build-car-btn"),
   document.getElementById("build-toy-btn"),
+  document.getElementById("move-btn"),
 ];
 
 let mode = "town"; // 'town' | 'inside'
@@ -407,7 +408,8 @@ const player = {
 let walkPhase = 0;
 let attackTimer = 0;
 const ATTACK_DURATION = 0.35;
-const keys = { up: false, down: false, left: false, right: false };
+const keys = { up: false, down: false, left: false, right: false, run: false };
+const RUN_MULTIPLIER = 1.8;
 
 function applyMovement(entityPos, speed, delta, onFacing) {
   let dx = 0;
@@ -630,14 +632,25 @@ function pickPaletteIndex(type) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function placeStructureMesh(type, x, z, paletteIndex) {
+function placeStructureMesh(type, x, z, paletteIndex, interiorTheme) {
   const palettes = STRUCTURE_PALETTES[type];
   const idx = paletteIndex != null ? paletteIndex : pickPaletteIndex(type);
+  const theme = interiorTheme != null ? interiorTheme : Math.floor(Math.random() * INTERIOR_THEMES.length);
   const built = STRUCTURE_FACTORIES[type](palettes[idx]);
   built.group.position.set(x, 0, z);
   townGroup.add(built.group);
   const doorWorld = built.doorLocal.clone().add(new THREE.Vector3(x, 0, z));
-  placedStructures.push({ type, x, z, doorWorld, wallHex: built.wallHex, label: built.label, paletteIndex: idx });
+  placedStructures.push({
+    type,
+    x,
+    z,
+    doorWorld,
+    wallHex: built.wallHex,
+    label: built.label,
+    paletteIndex: idx,
+    interiorTheme: theme,
+    group: built.group,
+  });
   return idx;
 }
 
@@ -755,10 +768,13 @@ const GHOST_DISTANCE = { house: 4.5, building: 5, shop: 4.5, car: 4, block: 2.4 
 let placementKind = null; // null | 'house' | 'building' | 'shop' | 'car' | 'block'
 let placementGhost = null;
 let placementGhostPaletteIndex = null;
+let placementGhostInteriorTheme = null;
 let placementColorKey = "red";
 let placementGhostX = 0;
 let placementGhostZ = 0;
 let placementValid = false;
+let isMovingExisting = false;
+let movingOriginal = null; // {kind:'structure'|'car', type, x, z, paletteIndex|colorIndex}
 
 const placementReticle = new THREE.Mesh(
   new THREE.CircleGeometry(1, 32),
@@ -808,24 +824,30 @@ function requestBuild(kind) {
   startPlacement(kind);
 }
 
-function startPlacement(kind) {
+function startPlacement(kind, forcedIndex, forcedTheme) {
   placementKind = kind;
   clearGhost();
   if (kind === "car") {
-    const idx = pickCarColor();
+    const idx = forcedIndex != null ? forcedIndex : pickCarColor();
     placementGhostPaletteIndex = idx;
     placementGhost = createCarMesh(CAR_COLORS[idx]);
   } else {
-    const idx = pickPaletteIndex(kind);
+    const idx = forcedIndex != null ? forcedIndex : pickPaletteIndex(kind);
     placementGhostPaletteIndex = idx;
+    placementGhostInteriorTheme = forcedTheme != null ? forcedTheme : Math.floor(Math.random() * INTERIOR_THEMES.length);
     placementGhost = STRUCTURE_FACTORIES[kind](STRUCTURE_PALETTES[kind][idx]).group;
   }
   makeGhostTransparent(placementGhost);
   townGroup.add(placementGhost);
   placementReticle.scale.setScalar(OBJECT_RADIUS[kind] || 2);
   placementReticle.visible = true;
-  confirmPlaceBtn.textContent = "✅ ここに たてる";
-  showMessage("あるいて ばしょを きめて「ここに たてる」を おそう");
+  if (isMovingExisting) {
+    confirmPlaceBtn.textContent = "✅ ここに うごかす";
+    showMessage("あるいて あたらしい ばしょを きめて「ここに うごかす」を おそう");
+  } else {
+    confirmPlaceBtn.textContent = "✅ ここに たてる";
+    showMessage("あるいて ばしょを きめて「ここに たてる」を おそう");
+  }
   updateHud();
 }
 
@@ -936,20 +958,31 @@ function confirmPlacement() {
     return;
   }
 
-  const recipe = RECIPES[kind];
-  for (const key in recipe) state.inventory[key] -= recipe[key];
+  const wasMoving = isMovingExisting;
+  if (!wasMoving) {
+    const recipe = RECIPES[kind];
+    for (const key in recipe) state.inventory[key] -= recipe[key];
+  }
   if (kind === "car") {
     spawnCar(x, z, placementGhostPaletteIndex);
     state.cars.push({ x, z, colorIndex: placementGhostPaletteIndex });
-    showMessage("🚗 くるまが できた！ちかづくと のれるよ");
+    showMessage(wasMoving ? "🚗 くるまを うごかしたよ" : "🚗 くるまが できた！ちかづくと のれるよ");
   } else {
-    placeStructureMesh(kind, x, z, placementGhostPaletteIndex);
-    state.structures.push({ type: kind, x, z, paletteIndex: placementGhostPaletteIndex });
-    showMessage(`${STRUCTURE_LABELS[kind]} が まちに たった！ドアから 入れるよ`);
+    placeStructureMesh(kind, x, z, placementGhostPaletteIndex, placementGhostInteriorTheme);
+    state.structures.push({
+      type: kind,
+      x,
+      z,
+      paletteIndex: placementGhostPaletteIndex,
+      interiorTheme: placementGhostInteriorTheme,
+    });
+    showMessage(wasMoving ? `${STRUCTURE_LABELS[kind]} を うごかしたよ` : `${STRUCTURE_LABELS[kind]} が まちに たった！ドアから 入れるよ`);
   }
-  playTone(900, 0.2);
+  playTone(wasMoving ? 650 : 900, wasMoving ? 0.15 : 0.2);
   renderInventory();
   saveState();
+  isMovingExisting = false;
+  movingOriginal = null;
   exitPlacement();
 }
 
@@ -960,9 +993,86 @@ function exitPlacement() {
   updateHud();
 }
 
+function cancelPlacement() {
+  if (isMovingExisting && movingOriginal) {
+    const o = movingOriginal;
+    if (o.kind === "car") {
+      spawnCar(o.x, o.z, o.colorIndex);
+      state.cars.push({ x: o.x, z: o.z, colorIndex: o.colorIndex });
+    } else {
+      placeStructureMesh(o.type, o.x, o.z, o.paletteIndex, o.interiorTheme);
+      state.structures.push({ type: o.type, x: o.x, z: o.z, paletteIndex: o.paletteIndex, interiorTheme: o.interiorTheme });
+    }
+    saveState();
+  }
+  isMovingExisting = false;
+  movingOriginal = null;
+  exitPlacement();
+}
+
 confirmPlaceBtn.addEventListener("click", confirmPlacement);
-cancelPlaceBtn.addEventListener("click", exitPlacement);
+cancelPlaceBtn.addEventListener("click", cancelPlacement);
 doneToyBtn.addEventListener("click", exitPlacement);
+
+// ---------- たてもの／くるまを うごかす ----------
+const MOVE_PICKUP_RADIUS = 5;
+
+function requestMove() {
+  if (mode !== "town" || drivingCar || placementKind) return;
+
+  let bestDist = Infinity;
+  let bestStructIndex = -1;
+  placedStructures.forEach((s, i) => {
+    const d = Math.hypot(player.x - s.x, player.z - s.z);
+    if (d < bestDist) {
+      bestDist = d;
+      bestStructIndex = i;
+    }
+  });
+  let bestCarDist = Infinity;
+  let bestCarIndex = -1;
+  placedCars.forEach((c, i) => {
+    const d = Math.hypot(player.x - c.x, player.z - c.z);
+    if (d < bestCarDist) {
+      bestCarDist = d;
+      bestCarIndex = i;
+    }
+  });
+
+  if (bestDist > MOVE_PICKUP_RADIUS && bestCarDist > MOVE_PICKUP_RADIUS) {
+    showMessage("ちかくに うごかせる たてものや くるまが ないよ");
+    return;
+  }
+
+  if (bestDist <= bestCarDist) {
+    const s = placedStructures[bestStructIndex];
+    townGroup.remove(s.group);
+    placedStructures.splice(bestStructIndex, 1);
+    const savedIndex = state.structures.findIndex((st) => st.type === s.type && st.x === s.x && st.z === s.z);
+    if (savedIndex >= 0) state.structures.splice(savedIndex, 1);
+    movingOriginal = {
+      kind: "structure",
+      type: s.type,
+      x: s.x,
+      z: s.z,
+      paletteIndex: s.paletteIndex,
+      interiorTheme: s.interiorTheme,
+    };
+    isMovingExisting = true;
+    startPlacement(s.type, s.paletteIndex, s.interiorTheme);
+  } else {
+    const c = placedCars[bestCarIndex];
+    townGroup.remove(c.mesh);
+    placedCars.splice(bestCarIndex, 1);
+    const savedIndex = state.cars.findIndex((cc) => cc.x === c.x && cc.z === c.z);
+    if (savedIndex >= 0) state.cars.splice(savedIndex, 1);
+    movingOriginal = { kind: "car", x: c.x, z: c.z, colorIndex: c.colorIndex };
+    isMovingExisting = true;
+    startPlacement("car", c.colorIndex);
+  }
+  saveState();
+}
+document.getElementById("move-btn").addEventListener("click", requestMove);
 
 let drivingCar = null;
 
@@ -990,7 +1100,7 @@ exitCarBtn.addEventListener("click", exitCarFn);
 // たてもの／くるまの じょうたい を さいこうちく（よみこみ時）
 // ==========================================================
 function rebuildFromState() {
-  state.structures.forEach((s) => placeStructureMesh(s.type, s.x, s.z, s.paletteIndex));
+  state.structures.forEach((s) => placeStructureMesh(s.type, s.x, s.z, s.paletteIndex, s.interiorTheme));
   state.cars.forEach((c) => spawnCar(c.x, c.z, c.colorIndex));
   state.toyBlocks.forEach((b) => {
     const mesh = createToyBlockMesh(colorHex(b.colorKey));
@@ -1100,12 +1210,32 @@ const insideGroup = new THREE.Group();
 insideGroup.visible = false;
 scene.add(insideGroup);
 
+const INTERIOR_THEMES = [
+  { floor: "#a4753f", rug: "#e06666", bed: "#5a92c9", table: "#a4753f", pot: "#a4753f" },
+  { floor: "#8a5a2b", rug: "#f4a259", bed: "#6a994e", table: "#8a5a2b", pot: "#8a5a2b" },
+  { floor: "#c9975b", rug: "#9d4edd", bed: "#e63946", table: "#c9975b", pot: "#c9975b" },
+  { floor: "#6b4226", rug: "#48cae4", bed: "#f9c74f", table: "#6b4226", pot: "#6b4226" },
+  { floor: "#b5834f", rug: "#43aa8b", bed: "#f28482", table: "#b5834f", pot: "#b5834f" },
+];
+
 const insideWallMat = new THREE.MeshLambertMaterial({ color: 0xf6e3c6 });
+const insideFloorMat = new THREE.MeshLambertMaterial({ color: 0xa4753f });
+const insideRugMat = new THREE.MeshLambertMaterial({ color: 0xe06666 });
+const insideBedMat = new THREE.MeshLambertMaterial({ color: 0x5a92c9 });
+const insideTableMat = new THREE.MeshLambertMaterial({ color: 0xa4753f });
+const insidePotMat = new THREE.MeshLambertMaterial({ color: 0xa4753f });
+
+function applyInteriorTheme(themeIndex) {
+  const t = INTERIOR_THEMES[themeIndex] || INTERIOR_THEMES[0];
+  insideFloorMat.color.set(t.floor);
+  insideRugMat.color.set(t.rug);
+  insideBedMat.color.set(t.bed);
+  insideTableMat.color.set(t.table);
+  insidePotMat.color.set(t.pot);
+}
+
 {
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(9, 7),
-    new THREE.MeshLambertMaterial({ color: 0xa4753f })
-  );
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(9, 7), insideFloorMat);
   floor.rotation.x = -Math.PI / 2;
   insideGroup.add(floor);
 
@@ -1139,10 +1269,7 @@ const insideWallMat = new THREE.MeshLambertMaterial({ color: 0xf6e3c6 });
   picture.position.set(-2.3, 2.6, -3.49);
   insideGroup.add(picture);
 
-  const bed = new THREE.Mesh(
-    new THREE.BoxGeometry(2.2, 0.6, 3.2),
-    new THREE.MeshLambertMaterial({ color: 0x5a92c9 })
-  );
+  const bed = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.6, 3.2), insideBedMat);
   bed.position.set(-3, 0.3, -1.6);
   insideGroup.add(bed);
   const pillow = new THREE.Mesh(
@@ -1152,23 +1279,16 @@ const insideWallMat = new THREE.MeshLambertMaterial({ color: 0xf6e3c6 });
   pillow.position.set(-3, 0.72, -2.9);
   insideGroup.add(pillow);
 
-  const table = new THREE.Mesh(
-    new THREE.BoxGeometry(1.4, 0.7, 1.4),
-    new THREE.MeshLambertMaterial({ color: 0xa4753f })
-  );
+  const table = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.7, 1.4), insideTableMat);
   table.position.set(2.6, 0.35, 1.6);
   insideGroup.add(table);
 
-  const rug = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.4, 1.4, 0.05, 24),
-    new THREE.MeshLambertMaterial({ color: 0xe06666 })
-  );
+  const rug = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.05, 24), insideRugMat);
   rug.position.set(0, 0.03, 1.2);
   insideGroup.add(rug);
 
-  const potMat = new THREE.MeshLambertMaterial({ color: 0xa4753f });
   const leafMat = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
-  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.24, 0.4, 10), potMat);
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.24, 0.4, 10), insidePotMat);
   pot.position.set(3.6, 0.2, -2.8);
   insideGroup.add(pot);
   const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 10), leafMat);
@@ -1205,6 +1325,7 @@ function enterBuilding(structure) {
   currentBuilding = structure;
   outsidePlayerPos = { x: player.x, z: player.z };
   insideWallMat.color = col(shadeColor(structure.wallHex, 55));
+  applyInteriorTheme(structure.interiorTheme || 0);
   setupInteriorNpc(structure.type);
   townGroup.visible = false;
   insideGroup.visible = true;
@@ -1496,6 +1617,9 @@ function setKey(key, isDown) {
     case "D":
       keys.right = isDown;
       break;
+    case "Shift":
+      keys.run = isDown;
+      break;
   }
 }
 
@@ -1519,6 +1643,7 @@ bindHold("btn-up", "up");
 bindHold("btn-down", "down");
 bindHold("btn-left", "left");
 bindHold("btn-right", "right");
+bindHold("btn-run", "run");
 
 // ==========================================================
 // メインループ
@@ -1543,16 +1668,21 @@ function animate() {
   if (mode === "inside") {
     const moving = applyMovement(player, 3.5, delta, (a) => (player.facing = a));
     player.x = Math.max(-3.9, Math.min(3.9, player.x));
-    player.z = Math.max(-3, Math.min(3.3, player.z));
-    playerRig.group.position.set(player.x, 0, player.z);
-    playerRig.group.rotation.y = player.facing;
-    if (moving) walkPhase += delta * 8;
-    playerRig.animate(walkPhase, moving);
-    if (interiorNpc) {
-      interiorNpc.phase += delta * 1.4;
-      interiorNpc.rig.animate(interiorNpc.phase, true);
+    if (player.z > 3.1) {
+      // ドアの ある がわまで あるくと、そのまま そとに でる
+      exitBuilding();
+    } else {
+      player.z = Math.max(-3, player.z);
+      playerRig.group.position.set(player.x, 0, player.z);
+      playerRig.group.rotation.y = player.facing;
+      if (moving) walkPhase += delta * 8;
+      playerRig.animate(walkPhase, moving);
+      if (interiorNpc) {
+        interiorNpc.phase += delta * 1.4;
+        interiorNpc.rig.animate(interiorNpc.phase, true);
+      }
+      updateInsideCamera(player, delta);
     }
-    updateInsideCamera(player, delta);
   } else {
     if (drivingCar) {
       const carState = drivingCar;
@@ -1567,12 +1697,13 @@ function animate() {
       checkBlockCollisions(carState);
       updateCamera(carState, delta);
     } else {
-      const moving = applyMovement(player, player.speed, delta, (a) => (player.facing = a));
+      const runSpeed = player.speed * (keys.run ? RUN_MULTIPLIER : 1);
+      const moving = applyMovement(player, runSpeed, delta, (a) => (player.facing = a));
       player.x = Math.max(-FIELD_HALF_X + 1, Math.min(FIELD_HALF_X - 1, player.x));
       player.z = Math.max(-FIELD_HALF_Z + 1, Math.min(FIELD_HALF_Z - 1, player.z));
       playerRig.group.position.set(player.x, 0, player.z);
       playerRig.group.rotation.y = player.facing;
-      if (moving) walkPhase += delta * 8;
+      if (moving) walkPhase += delta * (keys.run ? 13 : 8);
       playerRig.animate(walkPhase, moving, punchAmount);
       checkBlockCollisions(player);
       if (placementKind) {
