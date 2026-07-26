@@ -31,6 +31,17 @@ function makeEmptyGrid(cols, rows) {
   return Array.from({ length: rows }, () => Array(cols).fill(null));
 }
 
+// ---------- いろを あかるく／くらくする（立体感を だすため） ----------
+function shadeColor(hex, percent) {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const clamp = (v) => Math.max(0, Math.min(255, v));
+  const amt = Math.round(2.55 * percent);
+  const r = clamp((num >> 16) + amt);
+  const g = clamp(((num >> 8) & 0x00ff) + amt);
+  const b = clamp((num & 0x0000ff) + amt);
+  return "#" + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
+}
+
 // ---------- ほぞん／よみこみ ----------
 function saveState() {
   try {
@@ -236,20 +247,54 @@ function drawField() {
     ctx.stroke();
   }
 
-  // ブロック（レゴふう：しかく＋うえに ポッチ）
+  // ブロック（レゴふう：たちたい かんじの しかく＋うえに ポッチ）
   fieldBlocks.forEach((b) => {
-    ctx.fillStyle = colorHex(b.colorKey);
-    roundRect(ctx, b.x - b.size / 2, b.y - b.size / 2, b.size, b.size, 4);
-    ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    // じめんに おちる かげ
     ctx.beginPath();
-    ctx.arc(b.x, b.y - b.size / 2 + 3, 4, 0, Math.PI * 2);
+    ctx.ellipse(b.x, b.y + b.size / 2 + 2, b.size * 0.45, b.size * 0.16, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0,0,0,0.2)";
+    ctx.fill();
+
+    const base = colorHex(b.colorKey);
+    const grad = ctx.createLinearGradient(b.x - b.size / 2, b.y - b.size / 2, b.x + b.size / 2, b.y + b.size / 2);
+    grad.addColorStop(0, shadeColor(base, 32));
+    grad.addColorStop(0.5, base);
+    grad.addColorStop(1, shadeColor(base, -26));
+    ctx.fillStyle = grad;
+    roundRect(ctx, b.x - b.size / 2, b.y - b.size / 2, b.size, b.size, 5);
+    ctx.fill();
+    ctx.strokeStyle = shadeColor(base, -40);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // ポッチ（つやを つけて まるく みせる）
+    const studGrad = ctx.createRadialGradient(b.x - 1.5, b.y - b.size / 2 + 1.5, 0.5, b.x, b.y - b.size / 2 + 3, 5);
+    studGrad.addColorStop(0, "rgba(255,255,255,0.95)");
+    studGrad.addColorStop(1, shadeColor(base, -12));
+    ctx.fillStyle = studGrad;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y - b.size / 2 + 3, 4.5, 0, Math.PI * 2);
     ctx.fill();
   });
 
-  // プレイヤー（かおつき）
+  // プレイヤーの かげ
+  ctx.beginPath();
+  ctx.ellipse(player.x, player.y + player.size / 2 + 3, player.size * 0.5, player.size * 0.2, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.fill();
+
+  // プレイヤー（かおつき、つやを つけて まるみを だす）
   roundRect(ctx, player.x - player.size / 2, player.y - player.size / 2, player.size, player.size, 8);
-  ctx.fillStyle = "#ffd166";
+  const playerGrad = ctx.createLinearGradient(
+    player.x - player.size / 2,
+    player.y - player.size / 2,
+    player.x + player.size / 2,
+    player.y + player.size / 2
+  );
+  playerGrad.addColorStop(0, "#ffe9b8");
+  playerGrad.addColorStop(0.5, "#ffd166");
+  playerGrad.addColorStop(1, "#dd9c1f");
+  ctx.fillStyle = playerGrad;
   ctx.fill();
   ctx.strokeStyle = "#c98a1e";
   ctx.lineWidth = 2;
@@ -364,7 +409,8 @@ function renderPalette() {
   unlockedColors().forEach((c) => {
     const btn = document.createElement("button");
     btn.className = "color-swatch-btn" + (selectedColor === c.key && !eraserMode ? " selected" : "");
-    btn.style.background = c.hex;
+    btn.style.background = `linear-gradient(155deg, ${shadeColor(c.hex, 32)}, ${c.hex} 50%, ${shadeColor(c.hex, -22)})`;
+    btn.style.setProperty("--brick-dark", shadeColor(c.hex, -32));
     btn.title = c.name;
     btn.addEventListener("click", () => {
       selectedColor = c.key;
@@ -388,7 +434,13 @@ function renderBuildGrid() {
       const cell = document.createElement("div");
       cell.className = "cell";
       const colorKey = state.grid[r][c];
-      cell.style.background = colorKey ? colorHex(colorKey) : "#d8c9a3";
+      if (colorKey) {
+        const hex = colorHex(colorKey);
+        cell.classList.add("filled");
+        cell.style.setProperty("--brick-color", hex);
+        cell.style.setProperty("--brick-light", shadeColor(hex, 35));
+        cell.style.setProperty("--brick-dark", shadeColor(hex, -30));
+      }
       cell.addEventListener("click", () => onCellClick(r, c));
       gridEl.appendChild(cell);
     }

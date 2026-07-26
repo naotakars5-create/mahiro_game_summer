@@ -148,6 +148,11 @@ body {
 }
 
 /* ---------- あつめる画面 ---------- */
+.canvas-stage {
+  perspective: 1000px;
+  padding: 10px 0 26px;
+}
+
 #game-canvas {
   background: #7bc96f;
   border-radius: 14px;
@@ -157,6 +162,8 @@ body {
   touch-action: none;
   display: block;
   margin: 0 auto;
+  transform: rotateX(18deg);
+  box-shadow: 0 26px 24px -16px rgba(0, 0, 0, 0.45);
 }
 
 #touch-controls {
@@ -202,6 +209,8 @@ body {
   align-items: flex-start;
   justify-content: center;
   flex-wrap: wrap;
+  perspective: 1400px;
+  padding-bottom: 24px;
 }
 
 #build-grid {
@@ -216,16 +225,53 @@ body {
   width: 100%;
   max-width: 560px;
   aspect-ratio: 14 / 10;
+  transform: rotateX(20deg);
+  transform-origin: center top;
+  box-shadow: 0 34px 26px -18px rgba(0, 0, 0, 0.5);
 }
 
 .cell {
+  position: relative;
   background: #d8c9a3;
   border-radius: 3px;
   cursor: pointer;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.25),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
 }
 
 .cell:hover {
-  filter: brightness(1.1);
+  filter: brightness(1.08);
+}
+
+.cell.filled {
+  background: linear-gradient(155deg, var(--brick-light) 0%, var(--brick-color) 45%, var(--brick-dark) 100%);
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.55),
+    0 3px 0 var(--brick-dark),
+    0 6px 6px rgba(0, 0, 0, 0.35);
+  transform: translateY(-3px);
+}
+
+.cell.filled:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.4),
+    0 1px 0 var(--brick-dark);
+}
+
+.cell.filled::after {
+  content: "";
+  position: absolute;
+  top: 12%;
+  left: 50%;
+  width: 34%;
+  height: 34%;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.9), var(--brick-color) 55%, var(--brick-dark) 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .palette-panel {
@@ -249,16 +295,39 @@ body {
 }
 
 .color-swatch-btn {
+  position: relative;
   width: 36px;
   height: 36px;
   border-radius: 8px;
   border: 3px solid transparent;
   cursor: pointer;
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.55),
+    0 3px 0 var(--brick-dark, rgba(0, 0, 0, 0.3)),
+    0 5px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.color-swatch-btn::after {
+  content: "";
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  width: 34%;
+  height: 34%;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.05));
+}
+
+.color-swatch-btn:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.4);
 }
 
 .color-swatch-btn.selected {
   border-color: #333;
-  transform: scale(1.1);
+  transform: translateY(1px) scale(1.06);
 }
 
 .palette-panel .mini-btn {
