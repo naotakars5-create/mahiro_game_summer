@@ -26,6 +26,8 @@ const CINEMA_RECIPE = { gray: 5, red: 4, yellow: 4, blue: 2 };
 const PARK_RECIPE = { green: 5, yellow: 3, blue: 2 };
 const CAR_RECIPE = { red: 5, gray: 4, blue: 3 };
 const TRAIN_RECIPE = { gray: 8, blue: 4, yellow: 3, red: 2 };
+const BICYCLE_RECIPE = { gray: 3, red: 2, blue: 1 };
+const VEHICLE_KINDS = ["car", "train", "bicycle"];
 
 const SAVE_KEY = "legoTown3dSave_v1";
 
@@ -148,6 +150,7 @@ const buildButtons = [
   document.getElementById("build-park-btn"),
   document.getElementById("build-car-btn"),
   document.getElementById("build-train-btn"),
+  document.getElementById("build-bicycle-btn"),
   document.getElementById("build-toy-btn"),
   document.getElementById("move-btn"),
 ];
@@ -974,11 +977,63 @@ function createTrainMesh(bodyHex) {
   return group;
 }
 
+function createBicycleMesh(bodyHex) {
+  const group = new THREE.Group();
+  const wheelR = 0.42;
+  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x2b2b2b });
+  const wheelGeo = new THREE.TorusGeometry(wheelR, 0.05, 8, 20);
+  [-0.55, 0.55].forEach((z) => {
+    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+    wheel.rotation.y = Math.PI / 2;
+    wheel.position.set(0, wheelR, z);
+    group.add(wheel);
+  });
+
+  const hubMat = new THREE.MeshLambertMaterial({ color: col(shadeColor(bodyHex, -15)) });
+  [-0.55, 0.55].forEach((z) => {
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.06, 10), hubMat);
+    hub.rotation.z = Math.PI / 2;
+    hub.position.set(0, wheelR, z);
+    group.add(hub);
+  });
+
+  const frameMat = new THREE.MeshLambertMaterial({ color: col(bodyHex) });
+  const lowBar = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.2, 8), frameMat);
+  lowBar.rotation.x = Math.PI / 2;
+  lowBar.position.set(0, wheelR, 0);
+  group.add(lowBar);
+
+  const seatPost = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.5, 8), frameMat);
+  seatPost.position.set(0, wheelR + 0.25, -0.35);
+  group.add(seatPost);
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 0.28), new THREE.MeshLambertMaterial({ color: 0x2b2b2b }));
+  seat.position.set(0, wheelR + 0.52, -0.35);
+  group.add(seat);
+
+  const handlePost = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.6, 8), frameMat);
+  handlePost.position.set(0, wheelR + 0.3, 0.55);
+  group.add(handlePost);
+  const handleBar = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.04, 0.06), frameMat);
+  handleBar.position.set(0, wheelR + 0.62, 0.55);
+  group.add(handleBar);
+
+  const pedal = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.04, 12), hubMat);
+  pedal.rotation.x = Math.PI / 2;
+  pedal.position.set(0, wheelR * 0.6, 0);
+  group.add(pedal);
+
+  return group;
+}
+
 const CAR_COLORS = ["#e63946", "#48cae4", "#f9c74f", "#43aa8b"];
 const TRAIN_COLORS = ["#2b2b2b", "#264653", "#6a4c93", "#8d3b3b"];
-const VEHICLE_FACTORIES = { car: createCarMesh, train: createTrainMesh };
-const VEHICLE_COLORS = { car: CAR_COLORS, train: TRAIN_COLORS };
-const placedCars = []; // {x, z, mesh, facing, type: 'car'|'train'}
+const BICYCLE_COLORS = ["#e63946", "#48cae4", "#f9c74f", "#43aa8b", "#9d4edd"];
+const VEHICLE_FACTORIES = { car: createCarMesh, train: createTrainMesh, bicycle: createBicycleMesh };
+const VEHICLE_COLORS = { car: CAR_COLORS, train: TRAIN_COLORS, bicycle: BICYCLE_COLORS };
+const VEHICLE_SPEED = { car: 9, train: 12, bicycle: 7 };
+const VEHICLE_BOARD_RADIUS = { car: 2.1, train: 3, bicycle: 1.6 };
+const VEHICLE_EXIT_DIST = { car: 2.8, train: 4, bicycle: 2.0 };
+const placedCars = []; // {x, z, mesh, facing, type: 'car'|'train'|'bicycle'}
 
 function pickVehicleColor(type) {
   const colors = VEHICLE_COLORS[type];
@@ -1001,6 +1056,7 @@ function spawnCar(x, z, colorIndex, type) {
 
 document.getElementById("build-car-btn").addEventListener("click", () => requestBuild("car"));
 document.getElementById("build-train-btn").addEventListener("click", () => requestBuild("train"));
+document.getElementById("build-bicycle-btn").addEventListener("click", () => requestBuild("bicycle"));
 
 // ==========================================================
 // どうろを はしる ほかの くるま（かざり）
@@ -1079,10 +1135,30 @@ const RECIPES = {
   shop: SHOP_RECIPE,
   car: CAR_RECIPE,
   train: TRAIN_RECIPE,
+  bicycle: BICYCLE_RECIPE,
 };
-const OBJECT_RADIUS = { house: 2.1, building: 2.4, shop: 2.4, cinema: 2.9, park: 2.8, car: 1.9, train: 2.6 };
-const GHOST_DISTANCE = { house: 4.5, building: 5, shop: 4.5, cinema: 5.2, park: 5, car: 4, train: 5, block: 2.4 };
-const VEHICLE_LABELS = { car: "🚗 くるま", train: "🚂 でんしゃ" };
+const OBJECT_RADIUS = {
+  house: 2.1,
+  building: 2.4,
+  shop: 2.4,
+  cinema: 2.9,
+  park: 2.8,
+  car: 1.9,
+  train: 2.6,
+  bicycle: 1.0,
+};
+const GHOST_DISTANCE = {
+  house: 4.5,
+  building: 5,
+  shop: 4.5,
+  cinema: 5.2,
+  park: 5,
+  car: 4,
+  train: 5,
+  bicycle: 3,
+  block: 2.4,
+};
+const VEHICLE_LABELS = { car: "🚗 くるま", train: "🚂 でんしゃ", bicycle: "🚲 じてんしゃ" };
 
 let placementKind = null; // null | 'house' | 'building' | 'shop' | 'car' | 'block'
 let placementGhost = null;
@@ -1146,7 +1222,7 @@ function requestBuild(kind) {
 function startPlacement(kind, forcedIndex, forcedTheme) {
   placementKind = kind;
   clearGhost();
-  if (kind === "car" || kind === "train") {
+  if (VEHICLE_KINDS.includes(kind)) {
     const idx = forcedIndex != null ? forcedIndex : pickVehicleColor(kind);
     placementGhostPaletteIndex = idx;
     placementGhost = VEHICLE_FACTORIES[kind](VEHICLE_COLORS[kind][idx]);
@@ -1215,7 +1291,7 @@ function isValidPlacement(kind, x, z) {
     return Math.abs(x) < FIELD_HALF_X - 1 && Math.abs(z) < FIELD_HALF_Z - 1;
   }
   if (Math.abs(x) > FIELD_HALF_X - 3 || Math.abs(z) > FIELD_HALF_Z - 3) return false;
-  if (kind !== "car" && kind !== "train" && Math.abs(x) < ROAD_HALF_W + 1.5) return false;
+  if (!VEHICLE_KINDS.includes(kind) && Math.abs(x) < ROAD_HALF_W + 1.5) return false;
   for (const s of placedStructures) {
     const minDist = OBJECT_RADIUS[s.type] + OBJECT_RADIUS[kind] + 0.6;
     if (Math.hypot(x - s.x, z - s.z) < minDist) return false;
@@ -1282,7 +1358,7 @@ function confirmPlacement() {
     const recipe = RECIPES[kind];
     for (const key in recipe) state.inventory[key] -= recipe[key];
   }
-  if (kind === "car" || kind === "train") {
+  if (VEHICLE_KINDS.includes(kind)) {
     spawnCar(x, z, placementGhostPaletteIndex, kind);
     state.cars.push({ x, z, colorIndex: placementGhostPaletteIndex, type: kind });
     showMessage(wasMoving ? `${VEHICLE_LABELS[kind]} を うごかしたよ` : `${VEHICLE_LABELS[kind]} が できた！ちかづくと のれるよ`);
@@ -1399,7 +1475,8 @@ let drivingCar = null;
 function boardCar(car) {
   drivingCar = car;
   playerRig.group.visible = false;
-  exitCarBtn.textContent = (car.type || "car") === "train" ? "🚪 でんしゃを おりる" : "🚪 くるまを おりる";
+  const exitLabels = { car: "🚪 くるまを おりる", train: "🚪 でんしゃを おりる", bicycle: "🚪 じてんしゃを おりる" };
+  exitCarBtn.textContent = exitLabels[car.type || "car"];
   playTone(400, 0.1);
   updateHud();
 }
@@ -1407,7 +1484,7 @@ function boardCar(car) {
 function exitCarFn() {
   if (!drivingCar) return;
   const car = drivingCar;
-  const exitDist = (car.type || "car") === "train" ? 4 : 2.8;
+  const exitDist = VEHICLE_EXIT_DIST[car.type || "car"];
   player.x = car.x - Math.sin(car.facing) * exitDist;
   player.z = car.z - Math.cos(car.facing) * exitDist;
   player.x = Math.max(-FIELD_HALF_X + 1, Math.min(FIELD_HALF_X - 1, player.x));
@@ -1620,7 +1697,7 @@ function checkDoors(pos) {
 function checkCarBoarding(pos) {
   for (const c of placedCars) {
     const dist = Math.hypot(pos.x - c.x, pos.z - c.z);
-    const boardRadius = (c.type || "car") === "train" ? 3 : 2.1;
+    const boardRadius = VEHICLE_BOARD_RADIUS[c.type || "car"];
     if (dist < boardRadius) {
       boardCar(c);
       return;
@@ -2159,7 +2236,7 @@ function animate() {
     if (drivingCar) {
       const carState = drivingCar;
       const carPos = { x: carState.x, z: carState.z };
-      const vehicleSpeed = (carState.type || "car") === "train" ? 12 : 9;
+      const vehicleSpeed = VEHICLE_SPEED[carState.type || "car"];
       const moving = applyMovement(carPos, vehicleSpeed, delta, (a) => (carState.facing = a));
       carPos.x = Math.max(-FIELD_HALF_X + 2, Math.min(FIELD_HALF_X - 2, carPos.x));
       carPos.z = Math.max(-FIELD_HALF_Z + 2, Math.min(FIELD_HALF_Z - 2, carPos.z));
