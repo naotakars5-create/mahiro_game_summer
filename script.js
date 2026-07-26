@@ -434,7 +434,15 @@ function createHumanoid(opts) {
 
   return {
     group,
-    animate(phase, moving, punch) {
+    animate(phase, moving, punch, pose) {
+      if (pose === "bike") {
+        const pedal = Math.sin(phase) * 0.75;
+        leftLeg.rotation.x = pedal;
+        rightLeg.rotation.x = -pedal;
+        leftArm.rotation.x = -1.1;
+        rightArm.rotation.x = -1.1;
+        return;
+      }
       const swing = moving ? Math.sin(phase) * 0.9 : 0;
       leftLeg.rotation.x = swing;
       rightLeg.rotation.x = -swing;
@@ -1472,9 +1480,12 @@ document.getElementById("move-btn").addEventListener("click", requestMove);
 
 let drivingCar = null;
 
+const BICYCLE_SEAT_DIST = 0.35;
+const BICYCLE_SEAT_HEIGHT = 0.19;
+
 function boardCar(car) {
   drivingCar = car;
-  playerRig.group.visible = false;
+  playerRig.group.visible = car.type === "bicycle";
   const exitLabels = { car: "🚪 くるまを おりる", train: "🚪 でんしゃを おりる", bicycle: "🚪 じてんしゃを おりる" };
   exitCarBtn.textContent = exitLabels[car.type || "car"];
   playTone(400, 0.1);
@@ -2244,6 +2255,16 @@ function animate() {
       carState.z = carPos.z;
       carState.mesh.position.set(carState.x, 0, carState.z);
       if (moving) carState.mesh.rotation.y = carState.facing;
+      if (carState.type === "bicycle") {
+        playerRig.group.position.set(
+          carState.x - Math.sin(carState.facing) * BICYCLE_SEAT_DIST,
+          BICYCLE_SEAT_HEIGHT,
+          carState.z - Math.cos(carState.facing) * BICYCLE_SEAT_DIST
+        );
+        playerRig.group.rotation.y = carState.facing;
+        if (moving) walkPhase += delta * 10;
+        playerRig.animate(walkPhase, moving, 0, "bike");
+      }
       checkBlockCollisions(carState);
       checkFoodCollisions(carState);
       updateCamera(carState, delta);
