@@ -35,6 +35,15 @@ const TRAIN_RECIPE = { gray: 8, blue: 4, yellow: 3, red: 2 };
 const BICYCLE_RECIPE = { gray: 3, red: 2, blue: 1 };
 const VEHICLE_KINDS = ["car", "train", "bicycle"];
 
+// ---------- いきもの（ポケモンふうの つかまえる キャラクター） ----------
+const CREATURE_SPECIES = [
+  { id: "moko", name: "モコっち", color: "#8bc34a", accent: "#558b2f", rare: false },
+  { id: "pyoko", name: "ピョコっち", color: "#ffe082", accent: "#f9a825", rare: false },
+  { id: "puku", name: "プクっち", color: "#f8bbd0", accent: "#e91e8c", rare: false },
+  { id: "chapu", name: "チャプっち", color: "#4fc3f7", accent: "#0277bd", rare: false },
+  { id: "kira", name: "キラっち", color: "#fff59d", accent: "#ff6f00", rare: true },
+];
+
 const SAVE_KEY_PREFIX = "legoTown3dSave_v1_slot";
 const LAST_SLOT_KEY = "legoTown3dLastSlot";
 
@@ -69,6 +78,7 @@ let state = {
   xp: 0,
   level: 1,
   story: { started: false, stage: 0, progress: 0, done: false },
+  creatures: { moko: 0, pyoko: 0, puku: 0, chapu: 0, kira: 0 },
 };
 
 function shadeColor(hex, percent) {
@@ -109,6 +119,7 @@ function saveState() {
       xp: state.xp,
       level: state.level,
       story: state.story,
+      creatures: state.creatures,
     };
     localStorage.setItem(saveKeyFor(currentSlot), JSON.stringify(toSave));
   } catch (e) {
@@ -135,6 +146,10 @@ function loadState() {
     if (!state.story || typeof state.story !== "object") {
       state.story = { started: false, stage: 0, progress: 0, done: false };
     }
+    if (!state.creatures || typeof state.creatures !== "object") state.creatures = {};
+    CREATURE_SPECIES.forEach((s) => {
+      if (typeof state.creatures[s.id] !== "number") state.creatures[s.id] = 0;
+    });
   } catch (e) {
     console.warn("よみこみに しっぱいしました", e);
   }
@@ -156,6 +171,8 @@ const ACHIEVEMENTS = [
   { id: "night_watcher", label: "よふかしさん", emoji: "🌙" },
   { id: "level_5", label: "レベル5に とうたつ", emoji: "⭐" },
   { id: "story_clear", label: "ものがたり クリア", emoji: "📖" },
+  { id: "first_catch", label: "はじめての なかまげっと", emoji: "🐾" },
+  { id: "zukan_complete", label: "ずかん コンプリート", emoji: "📕" },
 ];
 
 function unlockAchievement(id) {
@@ -421,6 +438,8 @@ const achievementsToggle = document.getElementById("achievements-toggle");
 const achievementsPanel = document.getElementById("achievements-panel");
 const storyToggle = document.getElementById("story-toggle");
 const storyPanel = document.getElementById("story-panel");
+const zukanToggle = document.getElementById("zukan-toggle");
+const zukanPanel = document.getElementById("zukan-panel");
 const cinemaWatchBtn = document.getElementById("cinema-watch-btn");
 const restaurantEatBtn = document.getElementById("restaurant-eat-btn");
 const buildButtons = [
@@ -443,6 +462,7 @@ const buildButtons = [
 buildMenuToggle.addEventListener("click", () => buildMenuPanel.classList.toggle("hidden"));
 achievementsToggle.addEventListener("click", () => achievementsPanel.classList.toggle("hidden"));
 storyToggle.addEventListener("click", () => storyPanel.classList.toggle("hidden"));
+zukanToggle.addEventListener("click", () => zukanPanel.classList.toggle("hidden"));
 
 let mode = "town"; // 'town' | 'inside'
 
@@ -459,6 +479,8 @@ function updateHud() {
   if (placing) achievementsPanel.classList.add("hidden");
   storyToggle.classList.toggle("hidden", placing);
   if (placing) storyPanel.classList.add("hidden");
+  zukanToggle.classList.toggle("hidden", placing);
+  if (placing) zukanPanel.classList.add("hidden");
   exitHouseBtn.classList.toggle("hidden", mode !== "inside");
   shopTradeBtn.classList.toggle("hidden", !(mode === "inside" && currentBuilding && currentBuilding.type === "shop"));
   cinemaWatchBtn.classList.toggle("hidden", !(mode === "inside" && currentBuilding && currentBuilding.type === "cinema"));
@@ -756,6 +778,8 @@ function maybeSpawnFirework(delta, brightness, centerX, centerZ) {
 // ==========================================================
 const FIELD_HALF_X = 66;
 const FIELD_HALF_Z = 58;
+const BEACH_DEPTH = 10;
+const SEA_WATERLINE_Z = FIELD_HALF_Z + BEACH_DEPTH; // これより みなみは うみ
 const ROAD_HALF_W = 6.5;
 const VERTICAL_ROAD_X = [0, 30];
 const HORIZONTAL_ROAD_Z = [-24, 24];
@@ -954,6 +978,102 @@ for (let i = 0; i < 46; i++) {
   } while (isOnRoad(x, z, 2) && tries < 20);
   if (tries < 20) createTree(x, z);
 }
+
+// ==========================================================
+// うみ・すなはま（フィールドの みなみがわ）
+// ==========================================================
+const BEACH_HALF_X = 210;
+
+const sand = new THREE.Mesh(
+  new THREE.PlaneGeometry(BEACH_HALF_X * 2, BEACH_DEPTH + 4),
+  new THREE.MeshLambertMaterial({ color: 0xe9d9a6 })
+);
+sand.rotation.x = -Math.PI / 2;
+sand.position.set(0, 0.008, FIELD_HALF_Z + (BEACH_DEPTH + 4) / 2 - 2);
+townGroup.add(sand);
+
+// なみうちぎわの しろい あわ
+const foamLine = new THREE.Mesh(
+  new THREE.PlaneGeometry(BEACH_HALF_X * 2, 1.4),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 })
+);
+foamLine.rotation.x = -Math.PI / 2;
+foamLine.position.set(0, 0.02, SEA_WATERLINE_Z);
+townGroup.add(foamLine);
+
+// なみが うごく うみ
+const seaGeo = new THREE.PlaneGeometry(BEACH_HALF_X * 2, 220, 48, 26);
+const seaMesh = new THREE.Mesh(
+  seaGeo,
+  new THREE.MeshPhongMaterial({ color: 0x2b9eb3, shininess: 80, transparent: true, opacity: 0.9 })
+);
+seaMesh.rotation.x = -Math.PI / 2;
+seaMesh.position.set(0, 0.4, SEA_WATERLINE_Z + 110);
+townGroup.add(seaMesh);
+const seaBasePositions = seaGeo.attributes.position.array.slice();
+
+function updateSea(time) {
+  const pos = seaGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const lx = seaBasePositions[i * 3];
+    const ly = seaBasePositions[i * 3 + 1];
+    const wave = Math.sin(lx * 0.25 + time * 1.6) * 0.05 + Math.cos(ly * 0.35 + time * 1.1) * 0.04;
+    pos.setZ(i, wave);
+  }
+  pos.needsUpdate = true;
+  seaGeo.computeVertexNormals();
+}
+
+// やしの き
+function createPalmTree(x, z) {
+  const group = new THREE.Group();
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.14, 0.22, 3.2, 6),
+    new THREE.MeshLambertMaterial({ color: 0x9c7b4f })
+  );
+  trunk.position.y = 1.6;
+  trunk.rotation.z = 0.08;
+  group.add(trunk);
+  const frondMat = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
+  for (let i = 0; i < 6; i++) {
+    const frond = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.6, 4), frondMat);
+    const angle = (i / 6) * Math.PI * 2;
+    frond.position.set(Math.cos(angle) * 0.25, 3.25, Math.sin(angle) * 0.25);
+    frond.rotation.x = Math.PI / 2.3;
+    frond.rotation.y = angle;
+    group.add(frond);
+  }
+  const coconutMat = new THREE.MeshLambertMaterial({ color: 0x6b4226 });
+  [[-0.15, 0.1], [0.12, -0.08], [0.05, 0.18]].forEach(([cx, cz]) => {
+    const coconut = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), coconutMat);
+    coconut.position.set(cx, 3.0, cz);
+    group.add(coconut);
+  });
+  group.position.set(x, 0, z);
+  townGroup.add(group);
+}
+[-58, -34, -10, 16, 40, 58].forEach((x, i) => createPalmTree(x, FIELD_HALF_Z + 4.5 + (i % 2) * 2.5));
+
+// ビーチパラソル
+function createBeachUmbrella(x, z, clothHex) {
+  const group = new THREE.Group();
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.05, 1.8, 8),
+    new THREE.MeshLambertMaterial({ color: 0xdddddd })
+  );
+  pole.position.y = 0.9;
+  group.add(pole);
+  const canopy = new THREE.Mesh(new THREE.ConeGeometry(0.9, 0.5, 10), new THREE.MeshLambertMaterial({ color: col(clothHex) }));
+  canopy.position.y = 1.85;
+  group.add(canopy);
+  const towel = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.5), new THREE.MeshLambertMaterial({ color: col("#ffffff") }));
+  towel.rotation.x = -Math.PI / 2;
+  towel.position.set(0.9, 0.01, 0.2);
+  group.add(towel);
+  group.position.set(x, 0, z);
+  townGroup.add(group);
+}
+[["#e63946", -24], ["#48cae4", 4], ["#f9c74f", 30]].forEach(([hex, x]) => createBeachUmbrella(x, FIELD_HALF_Z + 3.5, hex));
 
 // ==========================================================
 // キャラクター（マインクラフトふう じんけい）
@@ -3605,6 +3725,184 @@ function updateNpc(npc, delta, time) {
   }
 }
 
+// ---------- いきもの（つかまえられる キャラクター） ----------
+function createCreatureMesh(species) {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(0.38, 10, 8),
+    new THREE.MeshLambertMaterial({ color: col(species.color) })
+  );
+  body.position.y = 0.4;
+  body.scale.set(1, 0.92, 1);
+  group.add(body);
+
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x2b2b2b });
+  [-0.14, 0.14].forEach((ex) => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 6), eyeMat);
+    eye.position.set(ex, 0.46, 0.33);
+    group.add(eye);
+  });
+
+  const accentMat = new THREE.MeshLambertMaterial({ color: col(species.accent) });
+  if (species.id === "chapu") {
+    [-0.4, 0.4].forEach((fx) => {
+      const fin = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.3, 6), accentMat);
+      fin.rotation.z = Math.PI / 2;
+      fin.position.set(fx, 0.4, 0);
+      group.add(fin);
+    });
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.34, 6), accentMat);
+    tail.rotation.x = Math.PI / 2;
+    tail.position.set(0, 0.4, -0.42);
+    group.add(tail);
+  } else if (species.id === "pyoko") {
+    [-0.14, 0.14].forEach((ex) => {
+      const ear = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.4, 6), accentMat);
+      ear.position.set(ex, 0.85, -0.02);
+      ear.rotation.z = ex > 0 ? -0.15 : 0.15;
+      group.add(ear);
+    });
+  } else if (species.id === "puku") {
+    [-0.36, 0.36].forEach((ex) => {
+      const wing = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.32, 4), accentMat);
+      wing.rotation.z = ex > 0 ? -Math.PI / 2 : Math.PI / 2;
+      wing.position.set(ex, 0.5, 0);
+      group.add(wing);
+    });
+  } else if (species.id === "kira") {
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2;
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 4), accentMat);
+      spike.position.set(Math.cos(angle) * 0.3, 0.68, Math.sin(angle) * 0.3);
+      group.add(spike);
+    }
+  } else {
+    [-0.2, 0.2].forEach((ex) => {
+      const ear = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), accentMat);
+      ear.position.set(ex, 0.75, 0);
+      group.add(ear);
+    });
+  }
+  return group;
+}
+
+const CREATURE_WANDER_HALF_X = FIELD_HALF_X - 4;
+const CREATURE_WANDER_MIN_Z = -FIELD_HALF_Z + 4;
+const CREATURE_WANDER_MAX_Z = SEA_WATERLINE_Z - 3; // すなはまも うろうろする
+const CATCH_RADIUS = 3.2;
+const creatures = [];
+let creatureIdSeq = 1;
+
+function randomCreatureSpot() {
+  let x, z, tries = 0;
+  do {
+    x = (Math.random() * 2 - 1) * CREATURE_WANDER_HALF_X;
+    z = CREATURE_WANDER_MIN_Z + Math.random() * (CREATURE_WANDER_MAX_Z - CREATURE_WANDER_MIN_Z);
+    tries++;
+  } while (isBlockedForNpc(x, z) && tries < 12);
+  return { x, z };
+}
+
+function pickRandomSpeciesId() {
+  if (Math.random() < 0.12) return "kira";
+  const common = CREATURE_SPECIES.filter((s) => !s.rare);
+  return common[Math.floor(Math.random() * common.length)].id;
+}
+
+function spawnCreature(speciesId) {
+  const species = CREATURE_SPECIES.find((s) => s.id === speciesId) || CREATURE_SPECIES[0];
+  const spot = randomCreatureSpot();
+  const group = createCreatureMesh(species);
+  group.position.set(spot.x, 0.34, spot.z);
+  townGroup.add(group);
+  creatures.push({
+    id: creatureIdSeq++,
+    species,
+    group,
+    x: spot.x,
+    z: spot.z,
+    facing: Math.random() * Math.PI * 2,
+    speed: 1.1 + Math.random() * 0.6,
+    target: null,
+    phase: Math.random() * Math.PI * 2,
+    fleeTimer: 0,
+  });
+}
+
+for (let i = 0; i < 9; i++) spawnCreature(pickRandomSpeciesId());
+
+function updateCreature(c, delta, time) {
+  if (!c.target || Math.hypot(c.target.x - c.x, c.target.z - c.z) < 0.5) {
+    c.target = randomCreatureSpot();
+  }
+  const dx = c.target.x - c.x;
+  const dz = c.target.z - c.z;
+  const dist = Math.hypot(dx, dz);
+  const speed = c.fleeTimer > 0 ? c.speed * 2.6 : c.speed;
+  if (dist > 0.1) {
+    const nx = dx / dist;
+    const nz = dz / dist;
+    const nextX = c.x + nx * speed * delta;
+    const nextZ = c.z + nz * speed * delta;
+    if (isBlockedForNpc(nextX, nextZ)) {
+      c.target = randomCreatureSpot();
+    } else {
+      c.x = nextX;
+      c.z = nextZ;
+      c.facing = Math.atan2(nx, nz);
+    }
+  }
+  if (c.fleeTimer > 0) c.fleeTimer -= delta;
+  const bob = Math.sin(time * 3 + c.phase) * 0.05;
+  c.group.position.set(c.x, 0.34 + bob, c.z);
+  c.group.rotation.y = c.facing;
+}
+
+function performCatch(creature) {
+  const species = creature.species;
+  const successChance = species.rare ? 0.5 : 0.82;
+  if (Math.random() < successChance) {
+    townGroup.remove(creature.group);
+    const idx = creatures.indexOf(creature);
+    if (idx >= 0) creatures.splice(idx, 1);
+    state.creatures[species.id] = (state.creatures[species.id] || 0) + 1;
+    playTone(880, 0.09);
+    playTone(1180, 0.1);
+    playTone(1500, 0.14);
+    showMessage(`🎉 ${species.name}を つかまえた！（${state.creatures[species.id]}びきめ）`);
+    addXp(species.rare ? 22 : 10);
+    unlockAchievement("first_catch");
+    if (CREATURE_SPECIES.every((s) => state.creatures[s.id] > 0)) {
+      unlockAchievement("zukan_complete");
+    }
+    renderZukanPanel();
+    saveState();
+    setTimeout(() => spawnCreature(pickRandomSpeciesId()), 15000 + Math.random() * 15000);
+  } else {
+    creature.fleeTimer = 1.2;
+    creature.target = randomCreatureSpot();
+    playTone(300, 0.08);
+    showMessage(`😲 ${species.name}に にげられた！`);
+  }
+}
+
+function renderZukanPanel() {
+  const el = document.getElementById("zukan-panel");
+  if (!el) return;
+  const caughtCount = CREATURE_SPECIES.filter((s) => state.creatures[s.id] > 0).length;
+  el.innerHTML =
+    `<div class="achievements-title">📕 いきものずかん（${caughtCount}/${CREATURE_SPECIES.length}）</div>` +
+    CREATURE_SPECIES.map((s) => {
+      const count = state.creatures[s.id] || 0;
+      const known = count > 0;
+      return `
+      <div class="inv-badge">
+        <span class="swatch" style="background:${known ? s.color : "#bbb"}"></span>
+        <span>${known ? s.name : "？？？"} × ${count}</span>
+      </div>`;
+    }).join("");
+}
+
 // ---------- こうげき（パンチ） ----------
 function performAttack() {
   if (mode !== "town" || drivingCar || placementKind || attackTimer > 0) return;
@@ -3938,6 +4236,20 @@ function performAction() {
     return;
   }
 
+  let nearestCreature = null;
+  let nearestCreatureDist = Infinity;
+  creatures.forEach((c) => {
+    const d = Math.hypot(c.x - player.x, c.z - player.z);
+    if (d < nearestCreatureDist) {
+      nearestCreatureDist = d;
+      nearestCreature = c;
+    }
+  });
+  if (nearestCreature && nearestCreatureDist <= CATCH_RADIUS + actionRadiusBonus()) {
+    performCatch(nearestCreature);
+    return;
+  }
+
   let nearestCow = null;
   let nearestCowDist = Infinity;
   npcs.forEach((npc) => {
@@ -4145,7 +4457,7 @@ function animate() {
       if (isBlockedForPlayer(player.x, prevPlayerZ)) player.x = prevPlayerX;
       if (isBlockedForPlayer(player.x, player.z)) player.z = prevPlayerZ;
       player.x = Math.max(-FIELD_HALF_X + 1, Math.min(FIELD_HALF_X - 1, player.x));
-      player.z = Math.max(-FIELD_HALF_Z + 1, Math.min(FIELD_HALF_Z - 1, player.z));
+      player.z = Math.max(-FIELD_HALF_Z + 1, Math.min(SEA_WATERLINE_Z - 1, player.z));
       playerRig.group.position.set(player.x, 0, player.z);
       playerRig.group.rotation.y = player.facing;
       if (moving) walkPhase += delta * (keys.run ? 13 : 8);
@@ -4165,6 +4477,8 @@ function animate() {
       if (drivingCar && drivingCar.npcRef === npc) return;
       updateNpc(npc, delta, time);
     });
+    creatures.forEach((c) => updateCreature(c, delta, time));
+    updateSea(time);
     const lights = trafficLightStates(time);
     applySignalState(nsRedMat, nsYellowMat, nsGreenMat, lights.ns);
     applySignalState(ewRedMat, ewYellowMat, ewGreenMat, lights.ew);
@@ -4263,6 +4577,7 @@ document.getElementById("start-btn").addEventListener("click", () => {
   applyLevelCosmetics(state.level);
   renderLevelBadge();
   renderStoryPanel();
+  renderZukanPanel();
   titleScreen.classList.add("hidden");
   gameScreen.classList.remove("hidden");
   resizeRenderer();

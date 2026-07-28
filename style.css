@@ -232,6 +232,13 @@ body {
   text-align: left;
 }
 
+#zukan-panel {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+
 .story-title {
   font-weight: bold;
   font-size: 1.05em;
