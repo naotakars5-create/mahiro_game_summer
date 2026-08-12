@@ -46,9 +46,15 @@
         <li>むらちょうさんに はなしかけると「📖ものがたり」が はじまるよ。おねがいされた ことを クリアして いくと、まちが どんどん にぎやかに なっていくよ</li>
         <li>「えいがかん」の なかは くらくて、マネージャーに はなしかけると えいがを かえられるよ</li>
         <li>「レストラン」の なかで「🍽たべる」ボタンを おすと、もっている たべものを たべられるよ</li>
-        <li>まちの みなみには うみと すなはまが あるよ。なみうちぎわまで さんぽしてみよう</li>
-        <li>まちや すなはまには ふしぎな いきものが うろうろしてるよ。ちかづいて「アクション」を おすと つかまえられるよ（にげられちゃう こともあるよ）</li>
-        <li>「📕ずかん」ボタンで、いままで つかまえた いきものを かくにんできるよ</li>
+        <li>まちの みなみには うみと すなはまが あるよ。なみうちぎわを こえると、じぶんも まちの ひとたちも およげるよ</li>
+        <li>まちや すなはま、うみには さかな・クジラ・カニ・くらげなど、いろんな ふしぎな いきものが いるよ</li>
+        <li>いきものを つかまえるには「🔴ボール」か「⭐スーパーボール」が ひつようだよ。おみせの なかで 💰コインを つかって かおう（コインは まちに おちてるよ）</li>
+        <li>ボールを もって いきものに ちかづき「アクション」を おすと つかまえられるよ（にげられちゃう こともあるよ）</li>
+        <li>いきものに ちかづくと でてくる「⚔バトル」ボタンで、なかまと たたかわせて きたえられるよ。かつと けいけんちと コインが もらえるよ</li>
+        <li>なかまは 1ぴきずつ レベルアップして、わざを さいだい4つまで おぼえるよ。レベルが あがると しんかする こともあるよ（しんかする レベルは いきものごとに ちがうよ）</li>
+        <li>「🎒なかま」ボタンで、じぶんの いきものたちの レベルや わざを かくにんできるよ</li>
+        <li>「📕ずかん」ボタンで、いままで であった いきものの しゅるいを かくにんできるよ</li>
+        <li>ひとや どうぶつに たべものを あげる「アクション」で、みんな よろこぶよ</li>
       </ol>
     </div>
   </div>
@@ -58,8 +64,10 @@
     <div class="topbar">
       <div id="inventory" class="inventory"></div>
       <div id="food-inventory" class="inventory"></div>
+      <div id="item-inventory" class="inventory"></div>
       <span id="rank-badge" class="inv-badge">🏅 むら</span>
       <span id="level-badge" class="inv-badge">⭐ レベル1</span>
+      <span id="coin-badge" class="inv-badge">💰 0</span>
       <div id="xp-bar-track" class="xp-bar-track"><div id="xp-bar-fill" class="xp-bar-fill"></div></div>
       <div class="topbar-buttons">
         <button id="sound-btn" class="mini-btn">🔊</button>
@@ -68,8 +76,12 @@
         <button id="achievements-toggle" class="mini-btn">🏆 じっせき</button>
         <button id="story-toggle" class="mini-btn">📖 ものがたり</button>
         <button id="zukan-toggle" class="mini-btn">📕 ずかん</button>
+        <button id="party-toggle" class="mini-btn">🎒 なかま</button>
+        <button id="battle-action-btn" class="mini-btn danger hidden">⚔ バトル</button>
         <button id="build-menu-toggle" class="mini-btn">🏗️ たてる ▾</button>
         <button id="shop-trade-btn" class="mini-btn hidden">🛒 こうかんする</button>
+        <button id="buy-normal-ball-btn" class="mini-btn hidden">🔴 ボール(20💰)</button>
+        <button id="buy-super-ball-btn" class="mini-btn hidden">⭐ すごいボール(60💰)</button>
         <button id="cinema-watch-btn" class="mini-btn hidden">🎬 えいがを みる</button>
         <button id="restaurant-eat-btn" class="mini-btn hidden">🍽 たべる</button>
         <button id="exit-house-btn" class="mini-btn hidden">◀ そとに でる</button>
@@ -82,6 +94,8 @@
     <div id="achievements-panel" class="inventory hidden"></div>
     <div id="story-panel" class="inventory hidden"></div>
     <div id="zukan-panel" class="inventory hidden"></div>
+    <div id="party-panel" class="inventory hidden"></div>
+    <div id="battle-panel" class="hidden"></div>
     <div id="build-menu" class="inventory hidden">
       <button id="build-house-btn" class="mini-btn build-trigger">🏠 いえ</button>
       <button id="build-building-btn" class="mini-btn build-trigger">🏢 ビル</button>

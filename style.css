@@ -296,6 +296,113 @@ body {
   outline: 3px solid #2d3436;
 }
 
+/* ---------- なかま パネル ---------- */
+.party-card {
+  background: #fff;
+  border: 2px solid #ccc;
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin: 3px 0;
+  text-align: left;
+}
+
+.party-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: bold;
+}
+
+.party-level {
+  margin-left: auto;
+  color: #555;
+  font-size: 0.9em;
+}
+
+.party-xp {
+  width: 100%;
+  margin: 4px 0;
+}
+
+.party-moves {
+  font-size: 0.85em;
+  color: #444;
+}
+
+/* ---------- バトル パネル ---------- */
+#battle-panel {
+  background: linear-gradient(to bottom, #2d3436, #1b1f21);
+  color: white;
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 6px;
+  text-align: left;
+}
+
+.battle-title {
+  font-weight: bold;
+  font-size: 1.15em;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.battle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.battle-side {
+  flex: 1;
+  font-size: 0.95em;
+}
+
+.battle-vs {
+  font-weight: bold;
+  color: #ff9f43;
+}
+
+.hp-track {
+  width: 100%;
+  height: 12px;
+  background: #444;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 3px;
+}
+
+.hp-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(to right, #43aa8b, #90e0ef);
+  transition: width 0.3s ease;
+}
+
+.hp-fill.enemy {
+  background: linear-gradient(to right, #e63946, #ff9f43);
+}
+
+.battle-log {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin: 8px 0;
+  font-size: 0.85em;
+  min-height: 3em;
+}
+
+.battle-moves,
+.battle-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.switch-btn.active {
+  outline: 3px solid #ffd166;
+}
+
 /* ---------- ゲームがめん（3Dワールド） ---------- */
 #game-message {
   min-height: 1.6em;

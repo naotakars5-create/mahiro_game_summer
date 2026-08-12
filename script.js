@@ -36,13 +36,180 @@ const BICYCLE_RECIPE = { gray: 3, red: 2, blue: 1 };
 const VEHICLE_KINDS = ["car", "train", "bicycle"];
 
 // ---------- いきもの（ポケモンふうの つかまえる キャラクター） ----------
-const CREATURE_SPECIES = [
-  { id: "moko", name: "モコっち", color: "#8bc34a", accent: "#558b2f", rare: false },
-  { id: "pyoko", name: "ピョコっち", color: "#ffe082", accent: "#f9a825", rare: false },
-  { id: "puku", name: "プクっち", color: "#f8bbd0", accent: "#e91e8c", rare: false },
-  { id: "chapu", name: "チャプっち", color: "#4fc3f7", accent: "#0277bd", rare: false },
-  { id: "kira", name: "キラっち", color: "#fff59d", accent: "#ff6f00", rare: true },
+const MOVES = {
+  tackle: { name: "たいあたり", power: 9 },
+  bite: { name: "がぶりつき", power: 13 },
+  kick: { name: "とびげり", power: 12 },
+  leaf: { name: "はっぱカッター", power: 12 },
+  vine: { name: "つるまきアタック", power: 17 },
+  bubble: { name: "あわアタック", power: 11 },
+  splash: { name: "みずでっぽう", power: 15 },
+  wave: { name: "ビッグウェーブ", power: 21 },
+  wing: { name: "つばさアタック", power: 13 },
+  gust: { name: "たつまき", power: 18 },
+  spark: { name: "スパーク", power: 16 },
+  pinch: { name: "はさみアタック", power: 14 },
+  star: { name: "スターアタック", power: 12 },
+  shine: { name: "ぴかぴかビーム", power: 20 },
+  earth: { name: "だいちのちから", power: 23 },
+  sing: { name: "ふしぎなうた", power: 10 },
+};
+
+// habitat: "land"（まちや のはら）、"beach"（すなはま）、"water"（うみで およぐ）
+const CREATURE_FAMILIES = [
+  {
+    id: "moko",
+    habitat: "land",
+    rare: false,
+    stages: [
+      { name: "モコっち", color: "#8bc34a", accent: "#558b2f", minLevel: 1 },
+      { name: "モコリオン", color: "#33691e", accent: "#1b5e20", minLevel: 6 },
+    ],
+    movePool: [
+      { level: 1, move: "tackle" },
+      { level: 3, move: "leaf" },
+      { level: 6, move: "vine" },
+      { level: 10, move: "earth" },
+    ],
+  },
+  {
+    id: "pyoko",
+    habitat: "land",
+    rare: false,
+    stages: [
+      { name: "ピョコっち", color: "#ffe082", accent: "#f9a825", minLevel: 1 },
+      { name: "ピョコルーン", color: "#ff8f00", accent: "#e65100", minLevel: 5 },
+    ],
+    movePool: [
+      { level: 1, move: "tackle" },
+      { level: 3, move: "kick" },
+      { level: 5, move: "gust" },
+      { level: 9, move: "star" },
+    ],
+  },
+  {
+    id: "puku",
+    habitat: "land",
+    rare: false,
+    stages: [
+      { name: "プクっち", color: "#f8bbd0", accent: "#e91e8c", minLevel: 1 },
+      { name: "プクルーナ", color: "#f06292", accent: "#ad1457", minLevel: 7 },
+    ],
+    movePool: [
+      { level: 1, move: "tackle" },
+      { level: 3, move: "wing" },
+      { level: 7, move: "gust" },
+      { level: 11, move: "sing" },
+    ],
+  },
+  {
+    id: "chapu",
+    habitat: "water",
+    rare: false,
+    stages: [
+      { name: "チャプっち", color: "#4fc3f7", accent: "#0277bd", minLevel: 1 },
+      { name: "チャプーラ", color: "#0288d1", accent: "#01579b", minLevel: 5 },
+      { name: "チャプロード", color: "#01579b", accent: "#002f6c", minLevel: 14 },
+    ],
+    movePool: [
+      { level: 1, move: "tackle" },
+      { level: 3, move: "bubble" },
+      { level: 5, move: "splash" },
+      { level: 9, move: "bite" },
+      { level: 14, move: "wave" },
+    ],
+  },
+  {
+    id: "kira",
+    habitat: "land",
+    rare: true,
+    stages: [{ name: "キラっち", color: "#fff59d", accent: "#ff6f00", minLevel: 1 }],
+    movePool: [
+      { level: 1, move: "tackle" },
+      { level: 4, move: "shine" },
+      { level: 8, move: "star" },
+      { level: 12, move: "earth" },
+    ],
+  },
+  {
+    id: "kuji",
+    habitat: "water",
+    rare: true,
+    stages: [
+      { name: "クジっち", color: "#5c6bc0", accent: "#283593", minLevel: 1 },
+      { name: "クジキング", color: "#283593", accent: "#0d133d", minLevel: 10 },
+    ],
+    movePool: [
+      { level: 1, move: "tackle" },
+      { level: 3, move: "splash" },
+      { level: 6, move: "wave" },
+      { level: 10, move: "earth" },
+    ],
+  },
+  {
+    id: "iruka",
+    habitat: "water",
+    rare: false,
+    stages: [
+      { name: "イルっち", color: "#4dd0e1", accent: "#00838f", minLevel: 1 },
+      { name: "イルカーネ", color: "#00acc1", accent: "#006064", minLevel: 6 },
+    ],
+    movePool: [
+      { level: 1, move: "tackle" },
+      { level: 3, move: "splash" },
+      { level: 6, move: "gust" },
+      { level: 9, move: "wave" },
+    ],
+  },
+  {
+    id: "kani",
+    habitat: "beach",
+    rare: false,
+    stages: [
+      { name: "カニっち", color: "#ff7043", accent: "#bf360c", minLevel: 1 },
+      { name: "カニゴウ", color: "#d84315", accent: "#8c2600", minLevel: 8 },
+    ],
+    movePool: [
+      { level: 1, move: "tackle" },
+      { level: 3, move: "pinch" },
+      { level: 8, move: "bite" },
+      { level: 12, move: "earth" },
+    ],
+  },
+  {
+    id: "hitode",
+    habitat: "beach",
+    rare: false,
+    stages: [{ name: "ヒトデっち", color: "#ff8a65", accent: "#e64a19", minLevel: 1 }],
+    movePool: [
+      { level: 1, move: "tackle" },
+      { level: 4, move: "star" },
+      { level: 8, move: "shine" },
+    ],
+  },
+  {
+    id: "kurage",
+    habitat: "water",
+    rare: false,
+    stages: [
+      { name: "クラゲっち", color: "#ce93d8", accent: "#6a1b9a", minLevel: 1 },
+      { name: "クラゲイザー", color: "#8e24aa", accent: "#4a148c", minLevel: 9 },
+    ],
+    movePool: [
+      { level: 1, move: "tackle" },
+      { level: 3, move: "bubble" },
+      { level: 9, move: "spark" },
+      { level: 13, move: "shine" },
+    ],
+  },
 ];
+
+function familyById(id) {
+  return CREATURE_FAMILIES.find((f) => f.id === id) || CREATURE_FAMILIES[0];
+}
+function stageNameOf(family, stageIdx) {
+  return family.stages[Math.min(stageIdx, family.stages.length - 1)].name;
+}
 
 const SAVE_KEY_PREFIX = "legoTown3dSave_v1_slot";
 const LAST_SLOT_KEY = "legoTown3dLastSlot";
@@ -78,7 +245,10 @@ let state = {
   xp: 0,
   level: 1,
   story: { started: false, stage: 0, progress: 0, done: false },
-  creatures: { moko: 0, pyoko: 0, puku: 0, chapu: 0, kira: 0 },
+  creatures: {},
+  party: [], // {familyId, stage, level, xp, moves:[...]}
+  coins: 0,
+  items: { normalBall: 0, superBall: 0 },
 };
 
 function shadeColor(hex, percent) {
@@ -120,6 +290,9 @@ function saveState() {
       level: state.level,
       story: state.story,
       creatures: state.creatures,
+      party: state.party,
+      coins: state.coins,
+      items: state.items,
     };
     localStorage.setItem(saveKeyFor(currentSlot), JSON.stringify(toSave));
   } catch (e) {
@@ -147,9 +320,17 @@ function loadState() {
       state.story = { started: false, stage: 0, progress: 0, done: false };
     }
     if (!state.creatures || typeof state.creatures !== "object") state.creatures = {};
-    CREATURE_SPECIES.forEach((s) => {
-      if (typeof state.creatures[s.id] !== "number") state.creatures[s.id] = 0;
+    CREATURE_FAMILIES.forEach((f) => {
+      if (typeof state.creatures[f.id] !== "number") state.creatures[f.id] = 0;
     });
+    if (!Array.isArray(state.party)) state.party = [];
+    state.party.forEach((m) => {
+      if (!Array.isArray(m.moves) || !m.moves.length) m.moves = [familyById(m.familyId).movePool[0].move];
+    });
+    if (typeof state.coins !== "number") state.coins = 0;
+    if (!state.items || typeof state.items !== "object") state.items = {};
+    if (typeof state.items.normalBall !== "number") state.items.normalBall = 0;
+    if (typeof state.items.superBall !== "number") state.items.superBall = 0;
   } catch (e) {
     console.warn("よみこみに しっぱいしました", e);
   }
@@ -173,6 +354,8 @@ const ACHIEVEMENTS = [
   { id: "story_clear", label: "ものがたり クリア", emoji: "📖" },
   { id: "first_catch", label: "はじめての なかまげっと", emoji: "🐾" },
   { id: "zukan_complete", label: "ずかん コンプリート", emoji: "📕" },
+  { id: "battle_win", label: "はじめての しょうり", emoji: "⚔️" },
+  { id: "evolution", label: "はじめての しんか", emoji: "🌟" },
 ];
 
 function unlockAchievement(id) {
@@ -440,6 +623,12 @@ const storyToggle = document.getElementById("story-toggle");
 const storyPanel = document.getElementById("story-panel");
 const zukanToggle = document.getElementById("zukan-toggle");
 const zukanPanel = document.getElementById("zukan-panel");
+const partyToggle = document.getElementById("party-toggle");
+const partyPanel = document.getElementById("party-panel");
+const battlePanel = document.getElementById("battle-panel");
+const battleActionBtn = document.getElementById("battle-action-btn");
+const buyNormalBallBtn = document.getElementById("buy-normal-ball-btn");
+const buySuperBallBtn = document.getElementById("buy-super-ball-btn");
 const cinemaWatchBtn = document.getElementById("cinema-watch-btn");
 const restaurantEatBtn = document.getElementById("restaurant-eat-btn");
 const buildButtons = [
@@ -463,6 +652,13 @@ buildMenuToggle.addEventListener("click", () => buildMenuPanel.classList.toggle(
 achievementsToggle.addEventListener("click", () => achievementsPanel.classList.toggle("hidden"));
 storyToggle.addEventListener("click", () => storyPanel.classList.toggle("hidden"));
 zukanToggle.addEventListener("click", () => zukanPanel.classList.toggle("hidden"));
+partyToggle.addEventListener("click", () => partyPanel.classList.toggle("hidden"));
+battleActionBtn.addEventListener("click", () => {
+  const c = findNearestCreature();
+  if (c) startBattle(c);
+});
+buyNormalBallBtn.addEventListener("click", () => buyBall("normalBall"));
+buySuperBallBtn.addEventListener("click", () => buyBall("superBall"));
 
 let mode = "town"; // 'town' | 'inside'
 
@@ -481,10 +677,16 @@ function updateHud() {
   if (placing) storyPanel.classList.add("hidden");
   zukanToggle.classList.toggle("hidden", placing);
   if (placing) zukanPanel.classList.add("hidden");
+  partyToggle.classList.toggle("hidden", placing);
+  if (placing) partyPanel.classList.add("hidden");
   exitHouseBtn.classList.toggle("hidden", mode !== "inside");
-  shopTradeBtn.classList.toggle("hidden", !(mode === "inside" && currentBuilding && currentBuilding.type === "shop"));
+  const inShop = mode === "inside" && currentBuilding && currentBuilding.type === "shop";
+  shopTradeBtn.classList.toggle("hidden", !inShop);
+  buyNormalBallBtn.classList.toggle("hidden", !inShop);
+  buySuperBallBtn.classList.toggle("hidden", !inShop);
   cinemaWatchBtn.classList.toggle("hidden", !(mode === "inside" && currentBuilding && currentBuilding.type === "cinema"));
   restaurantEatBtn.classList.toggle("hidden", !(mode === "inside" && currentBuilding && currentBuilding.type === "restaurant"));
+  if (mode === "inside" || placing || driving || activeBattle) battleActionBtn.classList.add("hidden");
   exitCarBtn.classList.toggle("hidden", mode !== "town" || !driving || placing);
   confirmPlaceBtn.classList.toggle("hidden", !placing);
   doneToyBtn.classList.toggle("hidden", placementKind !== "block");
@@ -525,6 +727,37 @@ function renderFoodInventory() {
     )
     .join("");
   document.getElementById("food-inventory").innerHTML = html;
+}
+
+function renderCoinBadge() {
+  const el = document.getElementById("coin-badge");
+  if (el) el.textContent = `💰 ${state.coins}`;
+}
+
+const BALL_COST = { normalBall: 20, superBall: 60 };
+function renderItemInventory() {
+  const el = document.getElementById("item-inventory");
+  if (!el) return;
+  el.innerHTML = `
+    <div class="inv-badge"><span>🔴 × ${state.items.normalBall}</span></div>
+    <div class="inv-badge"><span>⭐ × ${state.items.superBall}</span></div>`;
+}
+
+function buyBall(key) {
+  if (mode !== "inside" || !currentBuilding || currentBuilding.type !== "shop") return;
+  const cost = BALL_COST[key];
+  if (state.coins < cost) {
+    showMessage(`💰コインが たりないよ（あと ${cost - state.coins}こ）`);
+    return;
+  }
+  state.coins -= cost;
+  state.items[key] = (state.items[key] || 0) + 1;
+  playTone(700, 0.1);
+  playTone(950, 0.12);
+  showMessage(key === "superBall" ? "⭐スーパーボールを かったよ！" : "🔴ノーマルボールを かったよ！");
+  renderCoinBadge();
+  renderItemInventory();
+  saveState();
 }
 
 soundBtn.addEventListener("click", () => {
@@ -780,6 +1013,7 @@ const FIELD_HALF_X = 66;
 const FIELD_HALF_Z = 58;
 const BEACH_DEPTH = 10;
 const SEA_WATERLINE_Z = FIELD_HALF_Z + BEACH_DEPTH; // これより みなみは うみ
+const SWIM_LIMIT_Z = SEA_WATERLINE_Z + 80; // ここまで およいで いける
 const ROAD_HALF_W = 6.5;
 const VERTICAL_ROAD_X = [0, 30];
 const HORIZONTAL_ROAD_Z = [-24, 24];
@@ -1149,6 +1383,15 @@ function createHumanoid(opts) {
         rightLeg.rotation.x = -sway;
         leftArm.rotation.x = -0.7;
         rightArm.rotation.x = -0.7;
+        return;
+      }
+      if (pose === "swim") {
+        const stroke = moving ? Math.sin(phase) * 0.6 : 0.15;
+        leftArm.rotation.x = -1.2 + stroke;
+        rightArm.rotation.x = -1.2 - stroke;
+        const kick = moving ? Math.sin(phase * 1.4) * 0.4 : 0;
+        leftLeg.rotation.x = kick;
+        rightLeg.rotation.x = -kick;
         return;
       }
       const swing = moving ? Math.sin(phase) * 0.9 : 0;
@@ -3003,6 +3246,59 @@ function checkFoodCollisions(pos) {
   }
 }
 
+// ---------- コイン（あつめる おかね） ----------
+const coinItems = []; // {group, baseY, spin}
+const MAX_FIELD_COINS = 9;
+
+function createCoinMesh() {
+  const group = new THREE.Group();
+  const coin = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.22, 0.22, 0.06, 14),
+    new THREE.MeshPhongMaterial({ color: col("#ffd700"), shininess: 90 })
+  );
+  coin.rotation.x = Math.PI / 2;
+  group.add(coin);
+  return group;
+}
+
+function spawnCoinItem() {
+  if (coinItems.length >= MAX_FIELD_COINS) return;
+  let x, z;
+  let tries = 0;
+  do {
+    x = (Math.random() * 2 - 1) * (FIELD_HALF_X - 2);
+    z = (Math.random() * 2 - 1) * (FIELD_HALF_Z - 2);
+    tries++;
+  } while (isNearAnyStructureOrCar(x, z, 4.5) && tries < 20);
+
+  const group = createCoinMesh();
+  group.position.set(x, 0.4, z);
+  townGroup.add(group);
+  coinItems.push({ group, baseY: 0.4, spin: Math.random() * Math.PI * 2 });
+}
+
+for (let i = 0; i < 6; i++) spawnCoinItem();
+setInterval(() => {
+  if (mode === "town") spawnCoinItem();
+}, 3400);
+
+function checkCoinCollisions(pos) {
+  for (let i = coinItems.length - 1; i >= 0; i--) {
+    const c = coinItems[i];
+    const dist = Math.hypot(pos.x - c.group.position.x, pos.z - c.group.position.z);
+    if (dist < 1.1) {
+      const gain = 1 + Math.floor(Math.random() * 3);
+      state.coins += gain;
+      townGroup.remove(c.group);
+      coinItems.splice(i, 1);
+      playTone(1000, 0.08);
+      playTone(1300, 0.09);
+      renderCoinBadge();
+      saveState();
+    }
+  }
+}
+
 // ==========================================================
 // たてものの ドアと くるまへの アクセス はんてい
 // ==========================================================
@@ -3604,19 +3900,34 @@ function spawnNpc(rig, options) {
     phase: Math.random() * Math.PI * 2,
     isFlyer: !!options.isFlyer,
     isAnimal: !!options.isAnimal,
+    isSwimmer: !!options.isSwimmer,
     kind: options.kind || null,
     flyHeight: options.flyHeight || 0,
     hopTimer: 0,
     happyTimer: 0,
     quest: null,
     questBadge: null,
+    wanderHalfX: options.wanderHalfX || null,
+    wanderMinZ: typeof options.wanderMinZ === "number" ? options.wanderMinZ : null,
+    wanderMaxZ: typeof options.wanderMaxZ === "number" ? options.wanderMaxZ : null,
   };
   npc.rig.group.position.set(npc.x, npc.isFlyer ? npc.flyHeight : 0, npc.z);
   npcs.push(npc);
 }
 
-const humanShirts = ["#ff9f43", "#43aa8b", "#9d4edd"];
-for (let i = 0; i < 3; i++) {
+function npcWanderSpot(npc) {
+  const halfX = npc.wanderHalfX || NPC_WANDER_HALF_X;
+  const minZ = npc.wanderMinZ !== null ? npc.wanderMinZ : -NPC_WANDER_HALF_Z;
+  const maxZ = npc.wanderMaxZ !== null ? npc.wanderMaxZ : NPC_WANDER_HALF_Z;
+  return {
+    x: (Math.random() * 2 - 1) * halfX,
+    z: minZ + Math.random() * (maxZ - minZ),
+  };
+}
+
+const humanShirts = ["#ff9f43", "#43aa8b", "#9d4edd", "#e63946", "#48cae4", "#f9c74f", "#ff6b9d"];
+const swimwearColors = ["#ff6b6b", "#48cae4", "#ffd166", "#06d6a0"];
+for (let i = 0; i < 6; i++) {
   const rig = createHumanoid({
     skin: "#f4c98f",
     shirt: humanShirts[i % humanShirts.length],
@@ -3624,6 +3935,47 @@ for (let i = 0; i < 3; i++) {
     scale: 0.95,
   });
   spawnNpc(rig, { speed: 1.6 });
+}
+// ---------- すなはまに あつまる ひとたち ----------
+for (let i = 0; i < 6; i++) {
+  const rig = createHumanoid({
+    skin: "#f4c98f",
+    shirt: swimwearColors[i % swimwearColors.length],
+    pants: swimwearColors[(i + 2) % swimwearColors.length],
+    scale: 0.9 + Math.random() * 0.15,
+  });
+  spawnNpc(rig, {
+    speed: 1.2 + Math.random() * 0.8,
+    wanderHalfX: FIELD_HALF_X - 6,
+    wanderMinZ: FIELD_HALF_Z - 4,
+    wanderMaxZ: SEA_WATERLINE_Z - 2,
+  });
+  const beachNpc = npcs[npcs.length - 1];
+  const spot = npcWanderSpot(beachNpc);
+  beachNpc.x = spot.x;
+  beachNpc.z = spot.z;
+  beachNpc.rig.group.position.set(beachNpc.x, 0, beachNpc.z);
+}
+// ---------- うみで およぐ ひとたち ----------
+for (let i = 0; i < 4; i++) {
+  const rig = createHumanoid({
+    skin: "#f4c98f",
+    shirt: swimwearColors[(i + 1) % swimwearColors.length],
+    pants: swimwearColors[i % swimwearColors.length],
+    scale: 0.95,
+  });
+  spawnNpc(rig, {
+    speed: 1.4 + Math.random() * 0.6,
+    isSwimmer: true,
+    wanderHalfX: FIELD_HALF_X - 20,
+    wanderMinZ: SEA_WATERLINE_Z + 4,
+    wanderMaxZ: SWIM_LIMIT_Z - 8,
+  });
+  const swimmer = npcs[npcs.length - 1];
+  const spot = npcWanderSpot(swimmer);
+  swimmer.x = spot.x;
+  swimmer.z = spot.z;
+  swimmer.rig.group.position.set(swimmer.x, -0.35, swimmer.z);
 }
 for (let i = 0; i < 2; i++) spawnNpc(createCow(), { speed: 1.1, isAnimal: true, kind: "cow" });
 for (let i = 0; i < 2; i++) spawnNpc(createDog(), { speed: 2.2, isAnimal: true, kind: "dog" });
@@ -3681,10 +4033,7 @@ function updateNpc(npc, delta, time) {
     return;
   }
   if (!npc.target || Math.hypot(npc.target.x - npc.x, npc.target.z - npc.z) < 0.6) {
-    npc.target = {
-      x: (Math.random() * 2 - 1) * NPC_WANDER_HALF_X,
-      z: (Math.random() * 2 - 1) * NPC_WANDER_HALF_Z,
-    };
+    npc.target = npcWanderSpot(npc);
   }
   const dx = npc.target.x - npc.x;
   const dz = npc.target.z - npc.z;
@@ -3696,11 +4045,8 @@ function updateNpc(npc, delta, time) {
     const nz = dz / dist;
     const nextX = npc.x + nx * speed * delta;
     const nextZ = npc.z + nz * speed * delta;
-    if (!npc.isFlyer && isBlockedForNpc(nextX, nextZ)) {
-      npc.target = {
-        x: (Math.random() * 2 - 1) * NPC_WANDER_HALF_X,
-        z: (Math.random() * 2 - 1) * NPC_WANDER_HALF_Z,
-      };
+    if (!npc.isFlyer && !npc.isSwimmer && isBlockedForNpc(nextX, nextZ)) {
+      npc.target = npcWanderSpot(npc);
     } else {
       npc.x = nextX;
       npc.z = nextZ;
@@ -3719,6 +4065,9 @@ function updateNpc(npc, delta, time) {
   if (npc.isFlyer) {
     npc.rig.group.position.y = npc.flyHeight + Math.sin(time * 2 + npc.phase) * 0.3 + hopOffset;
     npc.rig.animate(npc.phase, moving);
+  } else if (npc.isSwimmer) {
+    npc.rig.group.position.y = -0.35 + Math.sin(time * 2 + npc.phase) * 0.06;
+    npc.rig.animate(npc.phase, moving, 0, "swim");
   } else {
     npc.rig.group.position.y = hopOffset;
     npc.rig.animate(npc.phase, moving);
@@ -3726,50 +4075,127 @@ function updateNpc(npc, delta, time) {
 }
 
 // ---------- いきもの（つかまえられる キャラクター） ----------
-function createCreatureMesh(species) {
+function createCreatureMesh(family, stageIdx) {
+  const stage = family.stages[Math.min(stageIdx, family.stages.length - 1)];
+  const scale = 1 + stageIdx * 0.32;
   const group = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.SphereGeometry(0.38, 10, 8),
-    new THREE.MeshLambertMaterial({ color: col(species.color) })
-  );
-  body.position.y = 0.4;
-  body.scale.set(1, 0.92, 1);
-  group.add(body);
-
+  const bodyMat = new THREE.MeshLambertMaterial({ color: col(stage.color) });
+  const accentMat = new THREE.MeshLambertMaterial({ color: col(stage.accent) });
   const eyeMat = new THREE.MeshBasicMaterial({ color: 0x2b2b2b });
-  [-0.14, 0.14].forEach((ex) => {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 6), eyeMat);
-    eye.position.set(ex, 0.46, 0.33);
-    group.add(eye);
-  });
 
-  const accentMat = new THREE.MeshLambertMaterial({ color: col(species.accent) });
-  if (species.id === "chapu") {
+  function addEyes(y, z, spread) {
+    [-spread, spread].forEach((ex) => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 6), eyeMat);
+      eye.position.set(ex, y, z);
+      group.add(eye);
+    });
+  }
+
+  function roundBody() {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.38, 10, 8), bodyMat);
+    body.position.y = 0.4;
+    body.scale.set(1, 0.92, 1);
+    group.add(body);
+    addEyes(0.46, 0.33, 0.14);
+  }
+
+  if (family.id === "chapu" || family.id === "iruka") {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.38, 10, 8), bodyMat);
+    body.scale.set(1, 0.85, 1.5);
+    body.position.y = 0.4;
+    group.add(body);
+    addEyes(0.48, 0.5, 0.14);
     [-0.4, 0.4].forEach((fx) => {
-      const fin = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.3, 6), accentMat);
+      const fin = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.28, 6), accentMat);
       fin.rotation.z = Math.PI / 2;
-      fin.position.set(fx, 0.4, 0);
+      fin.position.set(fx, 0.38, 0.1);
       group.add(fin);
     });
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.34, 6), accentMat);
-    tail.rotation.x = Math.PI / 2;
-    tail.position.set(0, 0.4, -0.42);
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.4, 6), accentMat);
+    tail.rotation.x = -Math.PI / 2;
+    tail.position.set(0, 0.4, -0.62);
     group.add(tail);
-  } else if (species.id === "pyoko") {
+    if (family.id === "iruka") {
+      const dorsal = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.26, 4), accentMat);
+      dorsal.position.set(0, 0.72, 0.05);
+      group.add(dorsal);
+    }
+  } else if (family.id === "kuji") {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 8), bodyMat);
+    body.scale.set(1.1, 0.85, 1.9);
+    body.position.y = 0.46;
+    group.add(body);
+    addEyes(0.56, 0.75, 0.18);
+    [-0.5, 0.5].forEach((fx) => {
+      const flipper = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.32), accentMat);
+      flipper.position.set(fx, 0.32, 0.15);
+      group.add(flipper);
+    });
+    const fluke = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.18, 4), accentMat);
+    fluke.rotation.z = Math.PI / 2;
+    fluke.rotation.y = Math.PI / 2;
+    fluke.position.set(0, 0.46, -0.95);
+    group.add(fluke);
+  } else if (family.id === "kani") {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), bodyMat);
+    body.scale.set(1.3, 0.6, 1);
+    body.position.y = 0.28;
+    group.add(body);
+    addEyes(0.42, 0.28, 0.16);
+    [-1, 1].forEach((side) => {
+      const claw = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), accentMat);
+      claw.position.set(side * 0.42, 0.32, 0.28);
+      group.add(claw);
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.22, 6), accentMat);
+      arm.rotation.z = side > 0 ? -0.7 : 0.7;
+      arm.position.set(side * 0.3, 0.3, 0.14);
+      group.add(arm);
+    });
+  } else if (family.id === "hitode") {
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), bodyMat);
+    core.position.y = 0.18;
+    group.add(core);
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2;
+      const arm = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.4, 4), bodyMat);
+      arm.rotation.x = Math.PI / 2;
+      arm.rotation.z = angle;
+      arm.position.set(Math.cos(angle) * 0.2, 0.14, Math.sin(angle) * 0.2);
+      group.add(arm);
+    }
+    addEyes(0.24, 0.14, 0.06);
+  } else if (family.id === "kurage") {
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(0.32, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      bodyMat
+    );
+    dome.position.y = 0.5;
+    group.add(dome);
+    addEyes(0.48, 0.24, 0.1);
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2;
+      const tentacle = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 5), accentMat);
+      tentacle.position.set(Math.cos(angle) * 0.18, 0.28, Math.sin(angle) * 0.18);
+      group.add(tentacle);
+    }
+  } else if (family.id === "pyoko") {
+    roundBody();
     [-0.14, 0.14].forEach((ex) => {
       const ear = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.4, 6), accentMat);
       ear.position.set(ex, 0.85, -0.02);
       ear.rotation.z = ex > 0 ? -0.15 : 0.15;
       group.add(ear);
     });
-  } else if (species.id === "puku") {
+  } else if (family.id === "puku") {
+    roundBody();
     [-0.36, 0.36].forEach((ex) => {
       const wing = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.32, 4), accentMat);
       wing.rotation.z = ex > 0 ? -Math.PI / 2 : Math.PI / 2;
       wing.position.set(ex, 0.5, 0);
       group.add(wing);
     });
-  } else if (species.id === "kira") {
+  } else if (family.id === "kira") {
+    roundBody();
     for (let i = 0; i < 5; i++) {
       const angle = (i / 5) * Math.PI * 2;
       const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 4), accentMat);
@@ -3777,63 +4203,90 @@ function createCreatureMesh(species) {
       group.add(spike);
     }
   } else {
+    roundBody();
     [-0.2, 0.2].forEach((ex) => {
       const ear = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), accentMat);
       ear.position.set(ex, 0.75, 0);
       group.add(ear);
     });
   }
+  group.scale.setScalar(scale);
   return group;
 }
 
-const CREATURE_WANDER_HALF_X = FIELD_HALF_X - 4;
-const CREATURE_WANDER_MIN_Z = -FIELD_HALF_Z + 4;
-const CREATURE_WANDER_MAX_Z = SEA_WATERLINE_Z - 3; // すなはまも うろうろする
+const CREATURE_LAND_HALF_X = FIELD_HALF_X - 4;
+const CREATURE_LAND_MIN_Z = -FIELD_HALF_Z + 4;
+const CREATURE_LAND_MAX_Z = FIELD_HALF_Z - 4;
+const CREATURE_BEACH_MIN_Z = FIELD_HALF_Z - 2;
+const CREATURE_BEACH_MAX_Z = SEA_WATERLINE_Z - 2;
+const CREATURE_WATER_MIN_Z = SEA_WATERLINE_Z + 3;
+const CREATURE_WATER_MAX_Z = SWIM_LIMIT_Z - 6;
+const CREATURE_WATER_HALF_X = FIELD_HALF_X - 30;
 const CATCH_RADIUS = 3.2;
 const creatures = [];
 let creatureIdSeq = 1;
 
-function randomCreatureSpot() {
+function randomCreatureSpotFor(habitat) {
   let x, z, tries = 0;
+  const halfX = habitat === "water" ? CREATURE_WATER_HALF_X : CREATURE_LAND_HALF_X;
+  const minZ = habitat === "water" ? CREATURE_WATER_MIN_Z : habitat === "beach" ? CREATURE_BEACH_MIN_Z : CREATURE_LAND_MIN_Z;
+  const maxZ = habitat === "water" ? CREATURE_WATER_MAX_Z : habitat === "beach" ? CREATURE_BEACH_MAX_Z : CREATURE_LAND_MAX_Z;
   do {
-    x = (Math.random() * 2 - 1) * CREATURE_WANDER_HALF_X;
-    z = CREATURE_WANDER_MIN_Z + Math.random() * (CREATURE_WANDER_MAX_Z - CREATURE_WANDER_MIN_Z);
+    x = (Math.random() * 2 - 1) * halfX;
+    z = minZ + Math.random() * (maxZ - minZ);
     tries++;
-  } while (isBlockedForNpc(x, z) && tries < 12);
+  } while (habitat !== "water" && isBlockedForNpc(x, z) && tries < 12);
   return { x, z };
 }
 
-function pickRandomSpeciesId() {
-  if (Math.random() < 0.12) return "kira";
-  const common = CREATURE_SPECIES.filter((s) => !s.rare);
-  return common[Math.floor(Math.random() * common.length)].id;
+function pickRandomFamilyId() {
+  const pool = Math.random() < 0.12 ? CREATURE_FAMILIES.filter((f) => f.rare) : CREATURE_FAMILIES.filter((f) => !f.rare);
+  return pool[Math.floor(Math.random() * pool.length)].id;
 }
 
-function spawnCreature(speciesId) {
-  const species = CREATURE_SPECIES.find((s) => s.id === speciesId) || CREATURE_SPECIES[0];
-  const spot = randomCreatureSpot();
-  const group = createCreatureMesh(species);
-  group.position.set(spot.x, 0.34, spot.z);
+function randomWildLevel(family) {
+  return family.rare ? 6 + Math.floor(Math.random() * 9) : 2 + Math.floor(Math.random() * 8);
+}
+
+function stageIdxForLevel(family, level) {
+  let idx = 0;
+  family.stages.forEach((s, i) => {
+    if (level >= s.minLevel) idx = i;
+  });
+  return idx;
+}
+
+function spawnCreature(familyId) {
+  const family = familyById(familyId || pickRandomFamilyId());
+  const spot = randomCreatureSpotFor(family.habitat);
+  const level = randomWildLevel(family);
+  const stageIdx = stageIdxForLevel(family, level);
+  const group = createCreatureMesh(family, stageIdx);
+  const baseY = family.habitat === "water" ? -0.15 : 0.34;
+  group.position.set(spot.x, baseY, spot.z);
   townGroup.add(group);
   creatures.push({
     id: creatureIdSeq++,
-    species,
+    family,
+    stage: stageIdx,
+    level,
     group,
+    baseY,
     x: spot.x,
     z: spot.z,
     facing: Math.random() * Math.PI * 2,
-    speed: 1.1 + Math.random() * 0.6,
+    speed: (family.habitat === "water" ? 1.6 : 1.1) + Math.random() * 0.6,
     target: null,
     phase: Math.random() * Math.PI * 2,
     fleeTimer: 0,
   });
 }
 
-for (let i = 0; i < 9; i++) spawnCreature(pickRandomSpeciesId());
+for (let i = 0; i < 16; i++) spawnCreature();
 
 function updateCreature(c, delta, time) {
   if (!c.target || Math.hypot(c.target.x - c.x, c.target.z - c.z) < 0.5) {
-    c.target = randomCreatureSpot();
+    c.target = randomCreatureSpotFor(c.family.habitat);
   }
   const dx = c.target.x - c.x;
   const dz = c.target.z - c.z;
@@ -3844,8 +4297,8 @@ function updateCreature(c, delta, time) {
     const nz = dz / dist;
     const nextX = c.x + nx * speed * delta;
     const nextZ = c.z + nz * speed * delta;
-    if (isBlockedForNpc(nextX, nextZ)) {
-      c.target = randomCreatureSpot();
+    if (c.family.habitat !== "water" && isBlockedForNpc(nextX, nextZ)) {
+      c.target = randomCreatureSpotFor(c.family.habitat);
     } else {
       c.x = nextX;
       c.z = nextZ;
@@ -3854,53 +4307,305 @@ function updateCreature(c, delta, time) {
   }
   if (c.fleeTimer > 0) c.fleeTimer -= delta;
   const bob = Math.sin(time * 3 + c.phase) * 0.05;
-  c.group.position.set(c.x, 0.34 + bob, c.z);
+  c.group.position.set(c.x, c.baseY + bob, c.z);
   c.group.rotation.y = c.facing;
 }
 
+function ballKeyFor(family) {
+  return family.rare ? "superBall" : "normalBall";
+}
+function ballLabelFor(family) {
+  return family.rare ? "⭐スーパーボール" : "🔴ノーマルボール";
+}
+
+function findNearestCreature() {
+  let nearest = null;
+  let nearestDist = Infinity;
+  creatures.forEach((c) => {
+    const d = Math.hypot(c.x - player.x, c.z - player.z);
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearest = c;
+    }
+  });
+  return nearest && nearestDist <= CATCH_RADIUS + actionRadiusBonus() ? nearest : null;
+}
+
 function performCatch(creature) {
-  const species = creature.species;
-  const successChance = species.rare ? 0.5 : 0.82;
+  const family = creature.family;
+  const ballKey = ballKeyFor(family);
+  if (!state.items[ballKey] || state.items[ballKey] <= 0) {
+    showMessage(`${ballLabelFor(family)}が ないよ。おみせで コインを つかって かってこよう！`);
+    return;
+  }
+  state.items[ballKey]--;
+  renderItemInventory();
+  const successChance = family.rare ? 0.55 : 0.85;
   if (Math.random() < successChance) {
     townGroup.remove(creature.group);
     const idx = creatures.indexOf(creature);
     if (idx >= 0) creatures.splice(idx, 1);
-    state.creatures[species.id] = (state.creatures[species.id] || 0) + 1;
+    state.creatures[family.id] = (state.creatures[family.id] || 0) + 1;
+    const moves = family.movePool
+      .filter((m) => m.level <= creature.level)
+      .map((m) => m.move)
+      .slice(-4);
+    state.party.push({
+      familyId: family.id,
+      stage: creature.stage,
+      level: creature.level,
+      xp: 0,
+      moves: moves.length ? moves : ["tackle"],
+    });
     playTone(880, 0.09);
     playTone(1180, 0.1);
     playTone(1500, 0.14);
-    showMessage(`🎉 ${species.name}を つかまえた！（${state.creatures[species.id]}びきめ）`);
-    addXp(species.rare ? 22 : 10);
+    showMessage(`🎉 ${stageNameOf(family, creature.stage)}（Lv${creature.level}）を つかまえた！`);
+    addXp(family.rare ? 22 : 10);
     unlockAchievement("first_catch");
-    if (CREATURE_SPECIES.every((s) => state.creatures[s.id] > 0)) {
+    if (CREATURE_FAMILIES.every((f) => state.creatures[f.id] > 0)) {
       unlockAchievement("zukan_complete");
     }
     renderZukanPanel();
+    renderPartyPanel();
     saveState();
-    setTimeout(() => spawnCreature(pickRandomSpeciesId()), 15000 + Math.random() * 15000);
+    setTimeout(() => spawnCreature(), 15000 + Math.random() * 15000);
   } else {
     creature.fleeTimer = 1.2;
-    creature.target = randomCreatureSpot();
+    creature.target = randomCreatureSpotFor(family.habitat);
     playTone(300, 0.08);
-    showMessage(`😲 ${species.name}に にげられた！`);
+    showMessage(`😲 ${stageNameOf(family, creature.stage)}に にげられた！（ボールは つかっちゃった）`);
   }
 }
 
 function renderZukanPanel() {
   const el = document.getElementById("zukan-panel");
   if (!el) return;
-  const caughtCount = CREATURE_SPECIES.filter((s) => state.creatures[s.id] > 0).length;
+  const caughtCount = CREATURE_FAMILIES.filter((f) => state.creatures[f.id] > 0).length;
   el.innerHTML =
-    `<div class="achievements-title">📕 いきものずかん（${caughtCount}/${CREATURE_SPECIES.length}）</div>` +
-    CREATURE_SPECIES.map((s) => {
-      const count = state.creatures[s.id] || 0;
+    `<div class="achievements-title">📕 いきものずかん（${caughtCount}/${CREATURE_FAMILIES.length}）</div>` +
+    CREATURE_FAMILIES.map((f) => {
+      const count = state.creatures[f.id] || 0;
       const known = count > 0;
+      const stage0 = f.stages[0];
       return `
       <div class="inv-badge">
-        <span class="swatch" style="background:${known ? s.color : "#bbb"}"></span>
-        <span>${known ? s.name : "？？？"} × ${count}</span>
+        <span class="swatch" style="background:${known ? stage0.color : "#bbb"}"></span>
+        <span>${known ? stage0.name : "？？？"} × ${count}</span>
       </div>`;
     }).join("");
+}
+
+// ---------- なかま（つかまえた いきもの）の レベルアップ ----------
+function creatureXpForNext(level) {
+  return 14 + level * 5;
+}
+
+function addCreatureXp(member, amount) {
+  member.xp += amount;
+  while (member.xp >= creatureXpForNext(member.level)) {
+    member.xp -= creatureXpForNext(member.level);
+    member.level++;
+    const family = familyById(member.familyId);
+    const nextStageIdx = member.stage + 1;
+    if (family.stages[nextStageIdx] && member.level >= family.stages[nextStageIdx].minLevel) {
+      const fromName = family.stages[member.stage].name;
+      member.stage = nextStageIdx;
+      showMessage(`🌟 ${fromName}が ${family.stages[nextStageIdx].name}に しんかした！`);
+      playTone(660, 0.1);
+      playTone(880, 0.12);
+      playTone(1100, 0.14);
+      playTone(1400, 0.18);
+      unlockAchievement("evolution");
+    }
+    const learned = family.movePool.find((m) => m.level === member.level);
+    if (learned && !member.moves.includes(learned.move)) {
+      if (member.moves.length >= 4) member.moves.shift();
+      member.moves.push(learned.move);
+      showMessage(`✨ ${family.stages[member.stage].name}が「${MOVES[learned.move].name}」を おぼえた！`);
+    }
+  }
+}
+
+function renderPartyPanel() {
+  const el = document.getElementById("party-panel");
+  if (!el) return;
+  if (!state.party.length) {
+    el.innerHTML =
+      `<div class="achievements-title">🎒 なかま</div>` +
+      `<div class="story-hint">まだ なかまが いないよ。おみせで ボールを かって いきものを つかまえよう！</div>`;
+    return;
+  }
+  el.innerHTML =
+    `<div class="achievements-title">🎒 なかま（${state.party.length}）</div>` +
+    state.party
+      .map((m) => {
+        const family = familyById(m.familyId);
+        const stage = family.stages[m.stage];
+        const need = creatureXpForNext(m.level);
+        const pct = Math.min(100, Math.round((m.xp / need) * 100));
+        return `
+      <div class="party-card">
+        <div class="party-card-head">
+          <span class="swatch" style="background:${stage.color}"></span>
+          <span>${stage.name}</span>
+          <span class="party-level">Lv${m.level}</span>
+        </div>
+        <div class="xp-bar-track party-xp"><div class="xp-bar-fill" style="width:${pct}%"></div></div>
+        <div class="party-moves">${m.moves.map((mk) => MOVES[mk].name).join("　")}</div>
+      </div>`;
+      })
+      .join("");
+}
+
+// ---------- バトル ----------
+let activeBattle = null;
+
+function battleMaxHp(level) {
+  return 24 + level * 5;
+}
+
+function resetBattlePlayerHp() {
+  const member = state.party[activeBattle.partyIndex];
+  activeBattle.playerMaxHp = battleMaxHp(member.level);
+  activeBattle.playerHp = activeBattle.playerMaxHp;
+}
+
+function startBattle(wildCreature) {
+  if (mode !== "town" || drivingCar || placementKind || activeBattle) return;
+  if (!state.party.length) {
+    showMessage("いっしょに たたかう なかまが いないよ。さきに つかまえよう！");
+    return;
+  }
+  activeBattle = {
+    wild: wildCreature,
+    partyIndex: 0,
+    wildLevel: wildCreature.level,
+    wildFamily: wildCreature.family,
+    wildStage: wildCreature.stage,
+    log: [],
+  };
+  activeBattle.wildMaxHp = battleMaxHp(activeBattle.wildLevel);
+  activeBattle.wildHp = activeBattle.wildMaxHp;
+  resetBattlePlayerHp();
+  battlePanel.classList.remove("hidden");
+  renderBattlePanel();
+  updateHud();
+}
+
+function endBattle() {
+  activeBattle = null;
+  battlePanel.classList.add("hidden");
+  updateHud();
+}
+
+function useMove(moveKey) {
+  if (!activeBattle || activeBattle.over) return;
+  const member = state.party[activeBattle.partyIndex];
+  const move = MOVES[moveKey];
+  if (!move) return;
+  const dmg = Math.max(1, Math.round(move.power * (0.7 + member.level * 0.06) + (Math.random() * 4 - 2)));
+  activeBattle.wildHp = Math.max(0, activeBattle.wildHp - dmg);
+  activeBattle.log.unshift(`${familyById(member.familyId).stages[member.stage].name}の「${move.name}」！ ${dmg}ダメージ！`);
+  playTone(520, 0.08);
+  if (activeBattle.wildHp <= 0) {
+    winBattle();
+    return;
+  }
+  const wildFamily = activeBattle.wildFamily;
+  const wildOptions = wildFamily.movePool.filter((m) => m.level <= activeBattle.wildLevel);
+  const wm = wildOptions.length ? wildOptions[Math.floor(Math.random() * wildOptions.length)].move : "tackle";
+  const wmove = MOVES[wm];
+  const wdmg = Math.max(1, Math.round(wmove.power * (0.7 + activeBattle.wildLevel * 0.06) + (Math.random() * 4 - 2)));
+  activeBattle.playerHp = Math.max(0, activeBattle.playerHp - wdmg);
+  activeBattle.log.unshift(`やせいの ${wildFamily.stages[activeBattle.wildStage].name}の「${wmove.name}」！ ${wdmg}ダメージ！`);
+  playTone(320, 0.08);
+  if (activeBattle.playerHp <= 0) {
+    loseBattle();
+    return;
+  }
+  renderBattlePanel();
+}
+
+function winBattle() {
+  activeBattle.over = true;
+  const member = state.party[activeBattle.partyIndex];
+  const xpGain = 14 + activeBattle.wildLevel * 3;
+  const coinGain = 5 + activeBattle.wildLevel;
+  state.coins += coinGain;
+  activeBattle.log.unshift(`🎉 かった！ けいけんち+${xpGain}　💰+${coinGain}`);
+  addCreatureXp(member, xpGain);
+  unlockAchievement("battle_win");
+  renderBattlePanel();
+  renderCoinBadge();
+  renderPartyPanel();
+  saveState();
+  playTone(880, 0.1);
+  playTone(1100, 0.12);
+  playTone(1400, 0.16);
+  setTimeout(endBattle, 2400);
+}
+
+function loseBattle() {
+  activeBattle.over = true;
+  activeBattle.log.unshift("😢 まけちゃった…つぎ がんばろう！");
+  renderBattlePanel();
+  setTimeout(endBattle, 2400);
+}
+
+function renderBattlePanel() {
+  if (!activeBattle || !battlePanel) return;
+  const member = state.party[activeBattle.partyIndex];
+  const family = familyById(member.familyId);
+  const stageName = family.stages[member.stage].name;
+  const wildStageName = activeBattle.wildFamily.stages[activeBattle.wildStage].name;
+  const playerPct = Math.max(0, Math.round((activeBattle.playerHp / activeBattle.playerMaxHp) * 100));
+  const wildPct = Math.max(0, Math.round((activeBattle.wildHp / activeBattle.wildMaxHp) * 100));
+  battlePanel.innerHTML = `
+    <div class="battle-title">⚔ バトル</div>
+    <div class="battle-row">
+      <div class="battle-side">
+        <div>${stageName}（Lv${member.level}）</div>
+        <div class="hp-track"><div class="hp-fill" style="width:${playerPct}%"></div></div>
+      </div>
+      <div class="battle-vs">VS</div>
+      <div class="battle-side">
+        <div>やせいの ${wildStageName}（Lv${activeBattle.wildLevel}）</div>
+        <div class="hp-track"><div class="hp-fill enemy" style="width:${wildPct}%"></div></div>
+      </div>
+    </div>
+    <div class="battle-log">${activeBattle.log.slice(0, 3).map((l) => `<div>${l}</div>`).join("")}</div>
+    ${
+      activeBattle.over
+        ? ""
+        : `<div class="battle-moves">
+      ${member.moves.map((mk) => `<button class="mini-btn battle-move-btn" data-move="${mk}">${MOVES[mk].name}</button>`).join("")}
+    </div>
+    ${
+      state.party.length > 1
+        ? `<div class="battle-switch">${state.party
+            .map(
+              (m, i) =>
+                `<button class="mini-btn switch-btn${i === activeBattle.partyIndex ? " active" : ""}" data-idx="${i}">${familyById(m.familyId).stages[m.stage].name} Lv${m.level}</button>`
+            )
+            .join("")}</div>`
+        : ""
+    }
+    <button id="battle-run-btn" class="mini-btn danger">🏃 にげる</button>`
+    }
+  `;
+  battlePanel.querySelectorAll(".battle-move-btn").forEach((btn) => {
+    btn.addEventListener("click", () => useMove(btn.dataset.move));
+  });
+  battlePanel.querySelectorAll(".switch-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activeBattle.partyIndex = Number(btn.dataset.idx);
+      resetBattlePlayerHp();
+      renderBattlePanel();
+    });
+  });
+  const runBtn = document.getElementById("battle-run-btn");
+  if (runBtn) runBtn.addEventListener("click", endBattle);
 }
 
 // ---------- こうげき（パンチ） ----------
@@ -3944,7 +4649,6 @@ function performFeed() {
   let nearest = null;
   let nearestDist = Infinity;
   npcs.forEach((npc) => {
-    if (!npc.isAnimal) return;
     const d = Math.hypot(npc.x - player.x, npc.z - player.z);
     if (d < nearestDist) {
       nearestDist = d;
@@ -3952,7 +4656,7 @@ function performFeed() {
     }
   });
   if (!nearest || nearestDist > 3.2) {
-    showMessage("ちかくに どうぶつが いないよ");
+    showMessage("ちかくに どうぶつや ひとが いないよ");
     return;
   }
   state.food[available.key]--;
@@ -3960,7 +4664,11 @@ function performFeed() {
   nearest.facing = Math.atan2(player.x - nearest.x, player.z - nearest.z);
   playTone(760, 0.1);
   playTone(950, 0.12);
-  showMessage(`${available.emoji} を あげたよ！よろこんでるね`);
+  showMessage(
+    nearest.isAnimal
+      ? `${available.emoji} を あげたよ！よろこんでるね`
+      : `${available.emoji} を あげたよ！「ありがとう！」`
+  );
   addXp(6);
   advanceStory("feed_animal");
   renderFoodInventory();
@@ -4448,22 +5156,30 @@ function animate() {
       }
       checkBlockCollisions(carState);
       checkFoodCollisions(carState);
+      checkCoinCollisions(carState);
       updateCamera(carState, delta);
-    } else {
+    } else if (!activeBattle) {
       const prevPlayerX = player.x;
       const prevPlayerZ = player.z;
-      const runSpeed = player.speed * (keys.run ? RUN_MULTIPLIER : 1);
+      const isSwimming = player.z > SEA_WATERLINE_Z;
+      const swimSpeed = player.speed * 0.6 * (keys.run ? RUN_MULTIPLIER : 1);
+      const runSpeed = isSwimming ? swimSpeed : player.speed * (keys.run ? RUN_MULTIPLIER : 1);
       const moving = applyMovement(player, runSpeed, delta, (a) => (player.facing = a));
-      if (isBlockedForPlayer(player.x, prevPlayerZ)) player.x = prevPlayerX;
-      if (isBlockedForPlayer(player.x, player.z)) player.z = prevPlayerZ;
+      if (!isSwimming) {
+        if (isBlockedForPlayer(player.x, prevPlayerZ)) player.x = prevPlayerX;
+        if (isBlockedForPlayer(player.x, player.z)) player.z = prevPlayerZ;
+      }
       player.x = Math.max(-FIELD_HALF_X + 1, Math.min(FIELD_HALF_X - 1, player.x));
-      player.z = Math.max(-FIELD_HALF_Z + 1, Math.min(SEA_WATERLINE_Z - 1, player.z));
-      playerRig.group.position.set(player.x, 0, player.z);
+      player.z = Math.max(-FIELD_HALF_Z + 1, Math.min(SWIM_LIMIT_Z - 2, player.z));
+      const nowSwimming = player.z > SEA_WATERLINE_Z;
+      const playerY = nowSwimming ? -0.35 + Math.sin(time * 2) * 0.05 : 0;
+      playerRig.group.position.set(player.x, playerY, player.z);
       playerRig.group.rotation.y = player.facing;
       if (moving) walkPhase += delta * (keys.run ? 13 : 8);
-      playerRig.animate(walkPhase, moving, punchAmount);
+      playerRig.animate(walkPhase, moving, punchAmount, nowSwimming ? "swim" : undefined);
       checkBlockCollisions(player);
       checkFoodCollisions(player);
+      checkCoinCollisions(player);
       if (placementKind) {
         updatePlacementFrame();
       } else {
@@ -4471,6 +5187,8 @@ function animate() {
         checkCarBoarding(player);
       }
       updateCamera(player, delta);
+      const nearCreature = findNearestCreature();
+      battleActionBtn.classList.toggle("hidden", !nearCreature || !state.party.length || !!placementKind);
     }
 
     npcs.forEach((npc) => {
@@ -4509,6 +5227,12 @@ function animate() {
       f.spin += delta * 1.1;
       f.group.rotation.y = f.spin;
       f.group.position.y = f.baseY + Math.sin(time * 2 + f.spin) * 0.08;
+    });
+
+    coinItems.forEach((c) => {
+      c.spin += delta * 2.2;
+      c.group.rotation.y = c.spin;
+      c.group.position.y = c.baseY + Math.sin(time * 2 + c.spin) * 0.08;
     });
 
     clouds.forEach((cloud) => {
@@ -4578,6 +5302,9 @@ document.getElementById("start-btn").addEventListener("click", () => {
   renderLevelBadge();
   renderStoryPanel();
   renderZukanPanel();
+  renderPartyPanel();
+  renderCoinBadge();
+  renderItemInventory();
   titleScreen.classList.add("hidden");
   gameScreen.classList.remove("hidden");
   resizeRenderer();
