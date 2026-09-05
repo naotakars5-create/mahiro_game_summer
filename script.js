@@ -1157,6 +1157,112 @@ VERTICAL_ROAD_X.forEach((vx) => {
   });
 });
 
+// ---------- おしボタン式の ほこうしゃしんごう ----------
+const pedRedMat = new THREE.MeshBasicMaterial({ color: 0xff3b30, side: THREE.DoubleSide });
+const pedGreenMat = new THREE.MeshBasicMaterial({ color: 0x073b18, side: THREE.DoubleSide });
+const pedButtons = []; // {x, z}
+const PED_GREEN_DURATION = 8; // ボタンを おしたあと あおの じかん
+const PED_BUTTON_RADIUS = 2.2;
+let pedGreenTimer = 0;
+let currentLights = { ns: "green", ew: "red", walk: false };
+let redLightHintCooldown = 0;
+
+function createPedestrianSignal(x, z) {
+  const group = new THREE.Group();
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.05, 2.4, 8),
+    new THREE.MeshLambertMaterial({ color: 0x666666 })
+  );
+  pole.position.y = 1.2;
+  group.add(pole);
+
+  const box = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5, 0.9, 0.24),
+    new THREE.MeshLambertMaterial({ color: 0x2b2b2b })
+  );
+  box.position.y = 2.45;
+  group.add(box);
+
+  const faceGeo = new THREE.PlaneGeometry(0.32, 0.34);
+  [1, -1].forEach((side) => {
+    const stopFace = new THREE.Mesh(faceGeo, pedRedMat);
+    stopFace.position.set(0, 2.68, side * 0.13);
+    if (side < 0) stopFace.rotation.y = Math.PI;
+    group.add(stopFace);
+    const walkFace = new THREE.Mesh(faceGeo, pedGreenMat);
+    walkFace.position.set(0, 2.26, side * 0.13);
+    if (side < 0) walkFace.rotation.y = Math.PI;
+    group.add(walkFace);
+  });
+
+  // おしボタンの はこ
+  const buttonBox = new THREE.Mesh(
+    new THREE.BoxGeometry(0.26, 0.32, 0.16),
+    new THREE.MeshLambertMaterial({ color: 0xf9c74f })
+  );
+  buttonBox.position.set(0, 1.15, 0.1);
+  group.add(buttonBox);
+  const button = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06, 0.06, 0.05, 10),
+    new THREE.MeshLambertMaterial({ color: 0xe63946 })
+  );
+  button.rotation.x = Math.PI / 2;
+  button.position.set(0, 1.18, 0.2);
+  group.add(button);
+
+  group.position.set(x, 0, z);
+  townGroup.add(group);
+  pedButtons.push({ x, z });
+}
+
+VERTICAL_ROAD_X.forEach((vx) => {
+  HORIZONTAL_ROAD_Z.forEach((hz) => {
+    createPedestrianSignal(vx - ROAD_HALF_W - 0.9, hz - ROAD_HALF_W - 0.9);
+  });
+});
+
+function applyPedestrianSignal(isWalk) {
+  pedRedMat.color.set(isWalk ? 0x3a0d0b : 0xff3b30);
+  pedGreenMat.color.set(isWalk ? 0x2ecc71 : 0x073b18);
+}
+
+function findNearestPedButton() {
+  let nearest = null;
+  let nearestDist = Infinity;
+  pedButtons.forEach((b) => {
+    const d = Math.hypot(b.x - player.x, b.z - player.z);
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearest = b;
+    }
+  });
+  return nearest && nearestDist <= PED_BUTTON_RADIUS ? nearest : null;
+}
+
+function pressPedestrianButton() {
+  if (pedGreenTimer > 0) {
+    showMessage("🚶 いまは あおだよ！ わたろう");
+    return;
+  }
+  pedGreenTimer = PED_GREEN_DURATION;
+  playTone(880, 0.08);
+  playTone(1200, 0.1);
+  showMessage("🔘 ボタンを おした！ しんごうが あおに なって、みんな わたれるよ");
+  addXp(2);
+}
+
+// ほこうしゃが みちに はいって いいか（あかしんごうなら まつ）
+function pedestrianCrossBlocked(fromX, fromZ, toX, toZ, lights) {
+  if (lights.walk) return false;
+  const onVerticalTo = VERTICAL_ROAD_X.some((vx) => Math.abs(toX - vx) < ROAD_HALF_W);
+  const onVerticalFrom = VERTICAL_ROAD_X.some((vx) => Math.abs(fromX - vx) < ROAD_HALF_W);
+  if (onVerticalTo && !onVerticalFrom && lights.ns !== "red") return true;
+  const onHorizontalTo = HORIZONTAL_ROAD_Z.some((hz) => Math.abs(toZ - hz) < ROAD_HALF_W);
+  const onHorizontalFrom = HORIZONTAL_ROAD_Z.some((hz) => Math.abs(fromZ - hz) < ROAD_HALF_W);
+  if (onHorizontalTo && !onHorizontalFrom && lights.ew !== "red") return true;
+  return false;
+}
+
 const TRAFFIC_LIGHT_GREEN = 4;
 const TRAFFIC_LIGHT_YELLOW = 1;
 const TRAFFIC_LIGHT_HALF = TRAFFIC_LIGHT_GREEN + TRAFFIC_LIGHT_YELLOW;
@@ -1174,6 +1280,13 @@ function applySignalState(redMat, yellowMat, greenMat, state) {
   redMat.color.set(state === "red" ? 0xff3b30 : 0x330000);
   yellowMat.color.set(state === "yellow" ? 0xffd23b : 0x332b00);
   greenMat.color.set(state === "green" ? 0x2ecc71 : 0x003300);
+}
+
+// おしボタンが おされている あいだは くるまが ぜんぶ とまって、ひとが わたれる
+function effectiveLights(time) {
+  if (pedGreenTimer > 0) return { ns: "red", ew: "red", walk: true };
+  const l = trafficLightStates(time);
+  return { ns: l.ns, ew: l.ew, walk: false };
 }
 
 // ---------- き ----------
@@ -2354,7 +2467,7 @@ const TRAIN_COLORS = ["#2b2b2b", "#264653", "#6a4c93", "#8d3b3b"];
 const BICYCLE_COLORS = ["#e63946", "#48cae4", "#f9c74f", "#43aa8b", "#9d4edd"];
 const VEHICLE_FACTORIES = { car: createCarMesh, train: createTrainMesh, bicycle: createBicycleMesh };
 const VEHICLE_COLORS = { car: CAR_COLORS, train: TRAIN_COLORS, bicycle: BICYCLE_COLORS };
-const VEHICLE_SPEED = { car: 9, train: 12, bicycle: 7 };
+const VEHICLE_SPEED = { car: 18, train: 24, bicycle: 15 };
 const VEHICLE_BOARD_RADIUS = { car: 2.1, train: 3, bicycle: 1.6 };
 const VEHICLE_EXIT_DIST = { car: 2.8, train: 4, bicycle: 2.0 };
 const placedCars = []; // {x, z, mesh, facing, type: 'car'|'train'|'bicycle'}
@@ -2397,13 +2510,13 @@ function spawnTrafficCar(axis, roadCenter, dir) {
     mesh.position.set(lane, 0, z);
     mesh.rotation.y = dir > 0 ? 0 : Math.PI;
     townGroup.add(mesh);
-    trafficCars.push({ mesh, axis, x: lane, z, dir, speed: 5 + Math.random() * 3 });
+    trafficCars.push({ mesh, axis, x: lane, z, dir, speed: 8 + Math.random() * 4 });
   } else {
     const x = (Math.random() * 2 - 1) * FIELD_HALF_X;
     mesh.position.set(x, 0, lane);
     mesh.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
     townGroup.add(mesh);
-    trafficCars.push({ mesh, axis, x, z: lane, dir, speed: 5 + Math.random() * 3 });
+    trafficCars.push({ mesh, axis, x, z: lane, dir, speed: 8 + Math.random() * 4 });
   }
 }
 VERTICAL_ROAD_X.forEach((vx) => {
@@ -2429,6 +2542,11 @@ function isTrafficStoppedByLight(pos, dir, crossLines, lightGo) {
 
 function updateTraffic(delta, lights) {
   trafficCars.forEach((t) => {
+    if (lights.walk) {
+      // ほこうしゃしんごうが あおの あいだは、くるまは みんな とまる
+      t.mesh.position.set(t.x, 0, t.z);
+      return;
+    }
     if (t.axis === "z") {
       if (!isTrafficStoppedByLight(t.z, t.dir, HORIZONTAL_ROAD_Z, lights.ns === "green")) {
         t.z += t.dir * t.speed * delta;
@@ -2961,7 +3079,15 @@ function performRide() {
     showMessage("ちかくに のれる どうぶつが いないよ（うしを さがしてね）");
     return;
   }
-  boardCar({ x: nearest.x, z: nearest.z, facing: nearest.facing, mesh: nearest.rig.group, type: "animal", npcRef: nearest, speed: nearest.speed * 2.4 });
+  boardCar({
+    x: nearest.x,
+    z: nearest.z,
+    facing: nearest.facing,
+    mesh: nearest.rig.group,
+    type: "animal",
+    npcRef: nearest,
+    speed: Math.max(7, nearest.speed * 5),
+  });
   showMessage("🐄 うしに のったよ！");
   unlockAchievement("rider");
   addXp(5);
@@ -4038,16 +4164,23 @@ function updateNpc(npc, delta, time) {
   const dx = npc.target.x - npc.x;
   const dz = npc.target.z - npc.z;
   const dist = Math.hypot(dx, dz);
-  const moving = dist > 0.1;
+  let moving = dist > 0.1;
   const speed = npc.hopTimer > 0 ? npc.speed * 2.4 : npc.speed;
+  // ひとは しんごうを みて、あかなら みちの てまえで まつ
+  const isPedestrian = !npc.isFlyer && !npc.isSwimmer && !npc.isAnimal;
   if (moving) {
     const nx = dx / dist;
     const nz = dz / dist;
     const nextX = npc.x + nx * speed * delta;
     const nextZ = npc.z + nz * speed * delta;
-    if (!npc.isFlyer && !npc.isSwimmer && isBlockedForNpc(nextX, nextZ)) {
+    if (isPedestrian && pedestrianCrossBlocked(npc.x, npc.z, nextX, nextZ, currentLights)) {
+      npc.facing = Math.atan2(nx, nz);
+      npc.waitingForLight = true;
+      moving = false; // あかしんごう：とまって まつ
+    } else if (!npc.isFlyer && !npc.isSwimmer && isBlockedForNpc(nextX, nextZ)) {
       npc.target = npcWanderSpot(npc);
     } else {
+      npc.waitingForLight = false;
       npc.x = nextX;
       npc.z = nextZ;
       npc.facing = Math.atan2(nx, nz);
@@ -4921,6 +5054,9 @@ function updateInsideCamera(pos, delta) {
 // ---------- まとめて つかえる「アクション」ボタン ----------
 // ばめんに あわせて、はなす・のる・つる・えさをあげる・うごかす・こうげきの
 // なかから いちばん ちかい／ふさわしい こうどうを えらんで じっこうする
+// ひとの ちかくでは「はなす」と「たべものを あげる」を こうごに つかえる
+let humanActionToggle = 0;
+
 function performAction() {
   if (mode === "inside") {
     performTalk();
@@ -4931,6 +5067,12 @@ function performAction() {
     return;
   }
   if (placementKind) return;
+
+  // しんごうの おしボタン（いちばん ちかくで おしたときが ゆうせん）
+  if (findNearestPedButton()) {
+    pressPedestrianButton();
+    return;
+  }
 
   const pond = placedStructures.find((s) => s.type === "pond");
   if (pond && Math.hypot(pond.x - player.x, pond.z - player.z) <= FISH_RADIUS) {
@@ -4953,10 +5095,7 @@ function performAction() {
       nearestCreature = c;
     }
   });
-  if (nearestCreature && nearestCreatureDist <= CATCH_RADIUS + actionRadiusBonus()) {
-    performCatch(nearestCreature);
-    return;
-  }
+  const creatureInRange = nearestCreature && nearestCreatureDist <= CATCH_RADIUS + actionRadiusBonus();
 
   let nearestCow = null;
   let nearestCowDist = Infinity;
@@ -4968,33 +5107,50 @@ function performAction() {
       nearestCow = npc;
     }
   });
-  if (nearestCow && nearestCowDist <= RIDE_RADIUS) {
-    performRide();
-    return;
-  }
+  const cowInRange = nearestCow && nearestCowDist <= RIDE_RADIUS;
 
+  let nearestHuman = null;
   let nearestHumanDist = Infinity;
   npcs.forEach((npc) => {
     if (npc.isAnimal) return;
     const d = Math.hypot(npc.x - player.x, npc.z - player.z);
-    if (d < nearestHumanDist) nearestHumanDist = d;
-  });
-  if (nearestHumanDist <= 3.2 + talkRadiusBonus()) {
-    performTalk();
-    return;
-  }
-
-  if (FOOD_TYPES.some((f) => state.food[f.key] > 0)) {
-    let nearestAnimalDist = Infinity;
-    npcs.forEach((npc) => {
-      if (!npc.isAnimal) return;
-      const d = Math.hypot(npc.x - player.x, npc.z - player.z);
-      if (d < nearestAnimalDist) nearestAnimalDist = d;
-    });
-    if (nearestAnimalDist <= 3.2) {
-      performFeed();
-      return;
+    if (d < nearestHumanDist) {
+      nearestHumanDist = d;
+      nearestHuman = npc;
     }
+  });
+  const humanInRange = nearestHuman && nearestHumanDist <= 3.2 + talkRadiusBonus();
+
+  const hasFood = FOOD_TYPES.some((f) => state.food[f.key] > 0);
+  let nearestAnimalDist = Infinity;
+  npcs.forEach((npc) => {
+    if (!npc.isAnimal) return;
+    const d = Math.hypot(npc.x - player.x, npc.z - player.z);
+    if (d < nearestAnimalDist) nearestAnimalDist = d;
+  });
+  const animalInRange = hasFood && nearestAnimalDist <= 3.2;
+
+  // ちかくに いる あいてが なんにんも いるときは、いちばん ちかい あいてを えらぶ
+  const candidates = [];
+  if (creatureInRange) candidates.push({ dist: nearestCreatureDist, run: () => performCatch(nearestCreature) });
+  if (cowInRange) candidates.push({ dist: nearestCowDist, run: performRide });
+  if (humanInRange) {
+    candidates.push({
+      dist: nearestHumanDist,
+      run: () => {
+        // ものがたり／おねがいの ひとは いつも「はなす」
+        const storyPerson = nearestHuman.quest || nearestHuman.isChief;
+        if (hasFood && !storyPerson && humanActionToggle % 2 === 1) performFeed();
+        else performTalk();
+        humanActionToggle++;
+      },
+    });
+  }
+  if (animalInRange) candidates.push({ dist: nearestAnimalDist, run: performFeed });
+  if (candidates.length) {
+    candidates.sort((a, b) => a.dist - b.dist);
+    candidates[0].run();
+    return;
   }
 
   let nearestMoveDist = Infinity;
@@ -5124,6 +5280,10 @@ function animate() {
       updateInsideCamera(player, delta);
     }
   } else {
+    if (pedGreenTimer > 0) pedGreenTimer = Math.max(0, pedGreenTimer - delta);
+    if (redLightHintCooldown > 0) redLightHintCooldown = Math.max(0, redLightHintCooldown - delta);
+    currentLights = effectiveLights(time);
+
     if (drivingCar) {
       const carState = drivingCar;
       const carPos = { x: carState.x, z: carState.z };
@@ -5171,6 +5331,14 @@ function animate() {
       }
       player.x = Math.max(-FIELD_HALF_X + 1, Math.min(FIELD_HALF_X - 1, player.x));
       player.z = Math.max(-FIELD_HALF_Z + 1, Math.min(SWIM_LIMIT_Z - 2, player.z));
+      // あかしんごうで みちに はいったら、やさしく おしえてあげる（とめはしない）
+      if (
+        redLightHintCooldown <= 0 &&
+        pedestrianCrossBlocked(prevPlayerX, prevPlayerZ, player.x, player.z, currentLights)
+      ) {
+        redLightHintCooldown = 9;
+        showMessage("🚦 あかしんごう！ ボタンを おして あおに してから わたろうね");
+      }
       const nowSwimming = player.z > SEA_WATERLINE_Z;
       const playerY = nowSwimming ? -0.35 + Math.sin(time * 2) * 0.05 : 0;
       playerRig.group.position.set(player.x, playerY, player.z);
@@ -5197,9 +5365,10 @@ function animate() {
     });
     creatures.forEach((c) => updateCreature(c, delta, time));
     updateSea(time);
-    const lights = trafficLightStates(time);
+    const lights = currentLights;
     applySignalState(nsRedMat, nsYellowMat, nsGreenMat, lights.ns);
     applySignalState(ewRedMat, ewYellowMat, ewGreenMat, lights.ew);
+    applyPedestrianSignal(lights.walk);
     updateTraffic(delta, lights);
     const brightness = updateDayNight(time);
     const activePos = drivingCar || player;
